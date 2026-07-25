@@ -105,6 +105,8 @@ signing {
     val inMemorySigningKey = signingKey.orNull
     if (!inMemorySigningKey.isNullOrBlank()) {
         useInMemoryPgpKeys(inMemorySigningKey, signingPassword.orNull)
+    } else if (isPublishingToCentral()) {
+        useGpgCmd()
     }
     isRequired = isPublishingToCentral()
     sign(publishing.publications)
