@@ -8,9 +8,12 @@ version = "0.1.0-SNAPSHOT"
 description = "Gradle plugin for safely shading implementation-only libraries into Minecraft mod jars."
 
 dependencies {
+    compileOnly("org.jspecify:jspecify:1.0.0")
+
     implementation("org.ow2.asm:asm:9.10.1")
     implementation("org.ow2.asm:asm-commons:9.10.1")
 
+    testCompileOnly("org.jspecify:jspecify:1.0.0")
     testImplementation(gradleTestKit())
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
