@@ -1,0 +1,9 @@
+[
+  {
+    "modid": "modshade_forge_112_integration",
+    "name": "ModShade Forge 1.12.2 Integration",
+    "description": "Real Forge 1.12.2 RetroFuturaGradle 1 integration project for ModShade.",
+    "version": "1.0.0",
+    "mcversion": "1.12.2"
+  }
+]

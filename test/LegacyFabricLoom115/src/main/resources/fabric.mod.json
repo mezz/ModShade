@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "modshade_legacy_fabric_loom_115_integration",
+  "version": "1.0.0",
+  "name": "ModShade Legacy Fabric Loom 1.15 Integration",
+  "description": "Real Legacy Fabric Loom 1.15 integration project for ModShade.",
+  "authors": ["Mezz"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.example.modshade.integration.legacyfabric.LegacyFabricIntegrationMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "1.13.2"
+  }
+}

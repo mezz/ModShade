@@ -1,0 +1,9 @@
+modLoader = "javafml"
+loaderVersion = "[48,)"
+license = "MIT"
+
+[[mods]]
+modId = "modshade_forge_integration"
+version = "1.0.0"
+displayName = "ModShade Forge Integration"
+description = "Real ForgeGradle integration project for ModShade."
