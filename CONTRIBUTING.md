@@ -28,6 +28,39 @@ Run only the loader integrations:
 ./gradlew integrationTest
 ```
 
+## Publishing
+
+Keep Maven Central credentials and signing keys in your local Gradle user
+properties, not in this repository:
+
+```properties
+# ~/.gradle/gradle.properties
+sonatypeUsername=...
+sonatypePassword=...
+signingKey=...
+signingPassword=...
+```
+
+CI can provide the same values with `ORG_GRADLE_PROJECT_sonatypeUsername`,
+`ORG_GRADLE_PROJECT_sonatypePassword`, `ORG_GRADLE_PROJECT_signingKey`, and
+`ORG_GRADLE_PROJECT_signingPassword`.
+
+Run a local dry run before publishing:
+
+```shell
+./gradlew -p plugin publishDryRun
+```
+
+This writes the Maven repository layout to `plugin/build/repos/dry-run` without
+contacting Sonatype. It can run without signing keys; when `signingKey` is
+configured, the dry-run repository also includes signature artifacts.
+
+Run publishing from the plugin build:
+
+```shell
+./gradlew -p plugin publishToSonatype closeAndReleaseSonatypeStagingRepository
+```
+
 ## Project layout
 
 The plugin implementation lives in `plugin/`. The root build includes it as a
