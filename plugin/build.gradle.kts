@@ -1,4 +1,5 @@
 import org.gradle.api.publish.maven.MavenPublication
+import java.util.concurrent.Callable
 
 plugins {
     `java-gradle-plugin`
@@ -53,11 +54,6 @@ gradlePlugin {
 val signingKey = providers.gradleProperty("signingKey")
 val signingPassword = providers.gradleProperty("signingPassword")
 
-fun isPublishingToCentral(): Boolean =
-    gradle.startParameter.taskNames.any { taskName ->
-        taskName == "publish" || taskName.contains("Sonatype")
-    }
-
 publishing {
     publications.withType<MavenPublication>().configureEach {
         pom {
@@ -105,10 +101,14 @@ signing {
     val inMemorySigningKey = signingKey.orNull
     if (!inMemorySigningKey.isNullOrBlank()) {
         useInMemoryPgpKeys(inMemorySigningKey, signingPassword.orNull)
-    } else if (isPublishingToCentral()) {
+    } else {
         useGpgCmd()
     }
-    isRequired = isPublishingToCentral()
+    setRequired(Callable {
+        gradle.taskGraph.allTasks.any { task ->
+            task.name.contains("Sonatype") || task.name.endsWith("ToSonatypeRepository")
+        }
+    })
     sign(publishing.publications)
 }
 
