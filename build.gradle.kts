@@ -45,13 +45,6 @@ val retroFuturaGradle1IntegrationTest = registerLoaderIntegrationTest(
     javaLauncher = java17Launcher,
 )
 
-val forgeGradle5IntegrationTest = registerLoaderIntegrationTest(
-    taskName = "forgeGradle5IntegrationTest",
-    projectDir = layout.projectDirectory.dir("test/ForgeGradle5"),
-    configurationCache = false,
-    javaLauncher = java17Launcher,
-)
-
 val modDevGradle2IntegrationTest = registerLoaderIntegrationTest(
     taskName = "modDevGradle2IntegrationTest",
     projectDir = layout.projectDirectory.dir("test/ModDevGradle2"),
@@ -123,7 +116,6 @@ val loaderIntegrationTests = listOf(
     fabricLoom117NonRemapIntegrationTest,
     legacyFabricLoom115IntegrationTest,
     retroFuturaGradle1IntegrationTest,
-    forgeGradle5IntegrationTest,
     forgeGradle6IntegrationTest,
     modDevGradle2IntegrationTest,
     modDevGradle1IntegrationTest,

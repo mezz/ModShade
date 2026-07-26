@@ -4,19 +4,20 @@ import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.UnknownTaskException;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 import org.gradle.api.tasks.bundling.Jar;
 
+import net.mezzdev.modshade.relocation.ModShadeRelocationPlanner;
 import net.mezzdev.modshade.relocation.PackageNameSanitizer;
 import net.mezzdev.modshade.task.ModShadeJar;
 import net.mezzdev.modshade.task.ModShadeSourcesJar;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -40,21 +41,33 @@ public abstract class ModShadeExtension {
     );
 
     private final Project project;
+    private final Configuration modShadeRuntimeElements;
+    private final Configuration modShadeSourcesElements;
     private final Property<String> relocationBase;
     private final ListProperty<String> excludes;
     private final Property<Boolean> failOnModJars;
-    private final List<RelocationRule> relocationRules = new ArrayList<>();
+    private final ListProperty<String> relocationRules;
     private final Set<String> modShadeJarTaskNames = new LinkedHashSet<>();
+    private final Set<String> publishedRuntimeTaskNames = new LinkedHashSet<>();
+    private final Set<String> publishedSourcesTaskNames = new LinkedHashSet<>();
 
     @Inject
-    public ModShadeExtension(Project project) {
+    public ModShadeExtension(
+            Project project,
+            Configuration modShadeRuntimeElements,
+            Configuration modShadeSourcesElements
+    ) {
         this.project = project;
+        this.modShadeRuntimeElements = modShadeRuntimeElements;
+        this.modShadeSourcesElements = modShadeSourcesElements;
         this.relocationBase = project.getObjects().property(String.class);
         this.relocationBase.convention(project.provider(() -> defaultRelocationBase(project)));
         this.excludes = project.getObjects().listProperty(String.class);
-        this.excludes.convention(DEFAULT_EXCLUDES);
+        this.excludes.set(DEFAULT_EXCLUDES);
         this.failOnModJars = project.getObjects().property(Boolean.class);
         this.failOnModJars.convention(true);
+        this.relocationRules = project.getObjects().listProperty(String.class);
+        this.relocationRules.convention(List.of());
     }
 
     public Property<String> getRelocationBase() {
@@ -70,7 +83,9 @@ public abstract class ModShadeExtension {
     }
 
     public List<RelocationRule> getRelocationRules() {
-        return Collections.unmodifiableList(relocationRules);
+        return relocationRules.get().stream()
+                .map(ModShadeRelocationPlanner::parseRule)
+                .toList();
     }
 
     public void exclude(String pattern) {
@@ -78,7 +93,11 @@ public abstract class ModShadeExtension {
     }
 
     public void relocate(String fromPackage, String toPackage) {
-        relocationRules.add(new RelocationRule(fromPackage, toPackage));
+        relocationRules.add(ModShadeRelocationPlanner.formatRule(new RelocationRule(fromPackage, toPackage)));
+    }
+
+    public ListProperty<String> getFormattedRelocationRules() {
+        return relocationRules;
     }
 
     public TaskProvider<ModShadeJar> shadeJar() {
@@ -110,6 +129,7 @@ public abstract class ModShadeExtension {
     public TaskProvider<ModShadeJar> shadeJar(String taskName, TaskProvider<? extends AbstractArchiveTask> sourceArchiveTask) {
         TaskProvider<ModShadeJar> task = registerModShadeJar(taskName, sourceArchiveTask);
         task.configure(modShadeJar -> modShadeJar.getArchiveClassifier().set(""));
+        publishRuntimeArtifact(task);
         configureAssembleDependsOn(task);
         return task;
     }
@@ -128,6 +148,7 @@ public abstract class ModShadeExtension {
     public TaskProvider<ModShadeSourcesJar> shadeSourcesJar(String taskName, TaskProvider<? extends AbstractArchiveTask> sourceArchiveTask) {
         TaskProvider<ModShadeSourcesJar> task = registerModShadeSourcesJar(taskName, sourceArchiveTask);
         task.configure(sourcesJar -> sourcesJar.getArchiveClassifier().set("sources"));
+        publishSourcesArtifact(task);
         configureAssembleDependsOn(task);
         return task;
     }
@@ -159,6 +180,18 @@ public abstract class ModShadeExtension {
         project.getTasks()
                 .matching(task -> "assemble".equals(task.getName()))
                 .configureEach(assemble -> assemble.dependsOn(archiveTask));
+    }
+
+    private void publishRuntimeArtifact(TaskProvider<ModShadeJar> task) {
+        if (publishedRuntimeTaskNames.add(task.getName())) {
+            modShadeRuntimeElements.getOutgoing().artifact(task);
+        }
+    }
+
+    private void publishSourcesArtifact(TaskProvider<ModShadeSourcesJar> task) {
+        if (publishedSourcesTaskNames.add(task.getName())) {
+            modShadeSourcesElements.getOutgoing().artifact(task);
+        }
     }
 
     private Optional<TaskProvider<? extends AbstractArchiveTask>> findArchiveTask(String taskName) {

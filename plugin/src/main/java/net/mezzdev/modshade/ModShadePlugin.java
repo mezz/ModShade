@@ -1,14 +1,18 @@
 package net.mezzdev.modshade;
 
 import org.gradle.api.Action;
+import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.attributes.Bundling;
 import org.gradle.api.attributes.Category;
+import org.gradle.api.attributes.DocsType;
 import org.gradle.api.attributes.LibraryElements;
 import org.gradle.api.attributes.Usage;
+import org.gradle.api.component.AdhocComponentWithVariants;
+import org.gradle.api.component.SoftwareComponentFactory;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.model.ObjectFactory;
@@ -16,21 +20,22 @@ import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
-import org.gradle.api.tasks.bundling.Jar;
+import org.gradle.util.GradleVersion;
 
-import net.mezzdev.modshade.relocation.ModShadeRelocationPlanner;
-import net.mezzdev.modshade.relocation.RelocateModShadeJarAction;
 import net.mezzdev.modshade.relocation.RelocateSourceFilesAction;
+import net.mezzdev.modshade.shadow.ConfigureShadowRuntimeAction;
+import net.mezzdev.modshade.shadow.RemoveDependencyExcludedEntriesAction;
 import net.mezzdev.modshade.task.ModShadeJar;
 import net.mezzdev.modshade.task.ModShadeReportTask;
 import net.mezzdev.modshade.task.ModShadeSourcesJar;
-import net.mezzdev.modshade.validation.ConfigureModShadeDependenciesAction;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import javax.inject.Inject;
 
 /**
  * Main Gradle plugin implementation.
@@ -41,9 +46,22 @@ public final class ModShadePlugin implements Plugin<Project> {
     public static final String RUNTIME_ONLY_CONFIGURATION_NAME = "modShadeRuntimeOnly";
     public static final String EXTENSION_NAME = "modShade";
     private static final String CLASSPATH_CONFIGURATION_NAME = "modShadeClasspath";
+    private static final String RUNTIME_ELEMENTS_CONFIGURATION_NAME = "modShadeRuntimeElements";
+    private static final String SOURCES_ELEMENTS_CONFIGURATION_NAME = "modShadeSourcesElements";
+    private static final String COMPONENT_NAME = "modShade";
+    private static final GradleVersion MINIMUM_GRADLE_VERSION = GradleVersion.version("8.3");
+
+    private final SoftwareComponentFactory softwareComponentFactory;
+
+    @Inject
+    public ModShadePlugin(SoftwareComponentFactory softwareComponentFactory) {
+        this.softwareComponentFactory = softwareComponentFactory;
+    }
 
     @Override
     public void apply(Project project) {
+        requireSupportedGradleVersion();
+
         Configuration modShadeImplementationConfiguration = createModShadeImplementationConfiguration(project);
         Configuration modShadeCompileOnlyConfiguration = createModShadeCompileOnlyConfiguration(project);
         Configuration modShadeRuntimeOnlyConfiguration = createModShadeRuntimeOnlyConfiguration(project);
@@ -53,10 +71,15 @@ public final class ModShadePlugin implements Plugin<Project> {
                 modShadeCompileOnlyConfiguration,
                 modShadeRuntimeOnlyConfiguration
         );
+        Configuration modShadeRuntimeElements = createModShadeRuntimeElementsConfiguration(project);
+        Configuration modShadeSourcesElements = createModShadeSourcesElementsConfiguration(project);
+        registerModShadeComponent(project, modShadeRuntimeElements, modShadeSourcesElements);
         ModShadeExtension extension = project.getExtensions().create(
                 EXTENSION_NAME,
                 ModShadeExtension.class,
-                project
+                project,
+                modShadeRuntimeElements,
+                modShadeSourcesElements
         );
 
         project.getPlugins().withId("java", plugin -> {
@@ -79,90 +102,53 @@ public final class ModShadePlugin implements Plugin<Project> {
         registerReportTask(project, modShadeClasspathConfiguration, extension);
     }
 
+    private static void requireSupportedGradleVersion() {
+        GradleVersion currentVersion = GradleVersion.current();
+        if (currentVersion.compareTo(MINIMUM_GRADLE_VERSION) < 0) {
+            throw new GradleException("ModShade requires Gradle " + MINIMUM_GRADLE_VERSION.getVersion() + " or newer.");
+        }
+    }
+
     private static void configureModShadeJarTasks(
             Project project,
             Configuration modShadeConfiguration,
             ModShadeExtension extension
     ) {
         FileCollection modShadeDependencyFiles = project.files(modShadeConfiguration);
-        List<ModShadeJar> modShadeJarTasks = new ArrayList<>();
 
         project.getTasks().withType(ModShadeJar.class).all(task -> {
             extension.markModShadeJarTask(task.getName());
-            modShadeJarTasks.add(task);
             task.setGroup("build");
             task.setIncludeEmptyDirs(false);
+            task.setPreserveFileTimestamps(false);
+            task.setReproducibleFileOrder(true);
+            List<FileCollection> shadowConfigurations = new ArrayList<>();
+            shadowConfigurations.add(modShadeConfiguration);
+            task.setConfigurations(shadowConfigurations);
+            task.mergeServiceFiles();
             task.getInputs().property("modShade.relocationBase", extension.getRelocationBase());
-            task.getInputs().property("modShade.relocationRules", project.provider(() ->
-                    extension.getRelocationRules().stream()
-                            .map(ModShadeRelocationPlanner::formatRule)
-                            .toList()
-            ));
+            task.getInputs().property("modShade.relocationRules", extension.getFormattedRelocationRules());
+            task.getInputs().property("modShade.excludes", extension.getExcludes());
+            task.getInputs().property("modShade.failOnModJars", extension.getFailOnModJars());
             task.getInputs()
                     .files(modShadeDependencyFiles)
                     .withPropertyName("modShade.dependencyFiles")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
 
-            task.doLast(new RelocateModShadeJarAction(
+            task.doFirst(new ConfigureShadowRuntimeAction(
+                    modShadeDependencyFiles,
+                    extension.getFailOnModJars(),
+                    extension.getRelocationBase(),
+                    extension.getFormattedRelocationRules()
+            ));
+            task.doLast(new RemoveDependencyExcludedEntriesAction(
+                    task.getSourceArchiveFile(),
+                    extension.getExcludes(),
                     modShadeDependencyFiles,
                     extension.getRelocationBase(),
-                    extension.getRelocationRules()
+                    extension.getFormattedRelocationRules()
             ));
         });
-
-        project.afterEvaluate(evaluatedProject -> {
-            for (ModShadeJar task : modShadeJarTasks) {
-                TaskProvider<Jar> dependencyJarTask = evaluatedProject.getTasks().register(
-                        dependencyJarTaskName(task.getName()),
-                        Jar.class,
-                        dependencyTask -> configureDependencyJarTask(
-                                evaluatedProject,
-                                dependencyTask,
-                                task.getName(),
-                                modShadeConfiguration,
-                                extension
-                        )
-                );
-                task.dependsOn(dependencyJarTask);
-                task.from(evaluatedProject.provider(() ->
-                        evaluatedProject.zipTree(dependencyJarTask.get().getArchiveFile().get().getAsFile())
-                ));
-            }
-        });
-    }
-
-    private static void configureDependencyJarTask(
-            Project project,
-            Jar task,
-            String modShadeJarTaskName,
-            Configuration modShadeConfiguration,
-            ModShadeExtension extension
-    ) {
-        task.setGroup("build");
-        task.setDescription("Filters modShade dependencies for " + modShadeJarTaskName + ".");
-        task.setIncludeEmptyDirs(false);
-        task.setPreserveFileTimestamps(false);
-        task.setReproducibleFileOrder(true);
-        task.dependsOn(modShadeConfiguration);
-        task.getArchiveBaseName().set(modShadeJarTaskName + "-dependencies");
-        task.getArchiveVersion().set("");
-        task.getArchiveClassifier().set("");
-        task.getDestinationDirectory().set(project.getLayout().getBuildDirectory().dir("modshade/" + modShadeJarTaskName));
-        task.getInputs().property("modShade.excludes", extension.getExcludes());
-        task.getInputs().property("modShade.failOnModJars", extension.getFailOnModJars());
-        task.from(project.provider(() ->
-                modShadeConfiguration.getFiles().stream()
-                        .map(project::zipTree)
-                        .toList()
-        ));
-        for (String exclude : extension.getExcludes().get()) {
-            task.exclude(exclude);
-        }
-
-        task.doFirst(new ConfigureModShadeDependenciesAction(
-                project.files(modShadeConfiguration),
-                extension.getFailOnModJars()
-        ));
     }
 
     private static void configureModShadeSourcesJarTasks(
@@ -174,19 +160,15 @@ public final class ModShadePlugin implements Plugin<Project> {
         RelocateSourceFilesAction relocateSourceFiles = new RelocateSourceFilesAction(
                 modShadeDependencyFiles,
                 extension.getRelocationBase(),
-                extension.getRelocationRules()
+                extension.getFormattedRelocationRules()
         );
 
-        project.getTasks().withType(ModShadeSourcesJar.class).configureEach(task -> {
+        project.getTasks().withType(ModShadeSourcesJar.class).all(task -> {
             extension.markModShadeJarTask(task.getName());
             task.setGroup("build");
             task.relocateSourcesWith(relocateSourceFiles);
             task.getInputs().property("modShade.relocationBase", extension.getRelocationBase());
-            task.getInputs().property("modShade.relocationRules", project.provider(() ->
-                    extension.getRelocationRules().stream()
-                            .map(ModShadeRelocationPlanner::formatRule)
-                            .toList()
-            ));
+            task.getInputs().property("modShade.relocationRules", extension.getFormattedRelocationRules());
             task.getInputs()
                     .files(modShadeDependencyFiles)
                     .withPropertyName("modShade.dependencyFiles")
@@ -201,11 +183,7 @@ public final class ModShadePlugin implements Plugin<Project> {
             task.setDescription("Writes a report of the current ModShade configuration.");
             task.getDependencyFiles().from(modShadeConfiguration);
             task.getRelocationBase().set(extension.getRelocationBase());
-            task.getExplicitRelocations().set(project.provider(() ->
-                    extension.getRelocationRules().stream()
-                            .map(ModShadeRelocationPlanner::formatRule)
-                            .toList()
-            ));
+            task.getExplicitRelocations().set(extension.getFormattedRelocationRules());
             task.getExcludes().set(extension.getExcludes());
             task.getFailOnModJars().set(extension.getFailOnModJars());
             task.getModShadeJarTasks().set(project.provider(extension::getModShadeJarTaskNames));
@@ -278,8 +256,65 @@ public final class ModShadePlugin implements Plugin<Project> {
         });
     }
 
-    private static String dependencyJarTaskName(String modShadeJarTaskName) {
-        return modShadeJarTaskName + "Dependencies";
+    private static Configuration createModShadeRuntimeElementsConfiguration(Project project) {
+        ObjectFactory objects = project.getObjects();
+        return project.getConfigurations().create(RUNTIME_ELEMENTS_CONFIGURATION_NAME, configuration -> {
+            configuration.setCanBeConsumed(true);
+            configuration.setCanBeResolved(false);
+            configuration.setDescription("Published ModShade runtime artifact with shaded dependencies already bundled.");
+            configuration.getAttributes().attribute(
+                    Usage.USAGE_ATTRIBUTE,
+                    objects.named(Usage.class, Usage.JAVA_RUNTIME)
+            );
+            configuration.getAttributes().attribute(
+                    Category.CATEGORY_ATTRIBUTE,
+                    objects.named(Category.class, Category.LIBRARY)
+            );
+            configuration.getAttributes().attribute(
+                    LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                    objects.named(LibraryElements.class, LibraryElements.JAR)
+            );
+            configuration.getAttributes().attribute(
+                    Bundling.BUNDLING_ATTRIBUTE,
+                    objects.named(Bundling.class, Bundling.SHADOWED)
+            );
+        });
+    }
+
+    private static Configuration createModShadeSourcesElementsConfiguration(Project project) {
+        ObjectFactory objects = project.getObjects();
+        return project.getConfigurations().create(SOURCES_ELEMENTS_CONFIGURATION_NAME, configuration -> {
+            configuration.setCanBeConsumed(true);
+            configuration.setCanBeResolved(false);
+            configuration.setDescription("Published ModShade sources artifact with shaded dependency sources relocated.");
+            configuration.getAttributes().attribute(
+                    Usage.USAGE_ATTRIBUTE,
+                    objects.named(Usage.class, Usage.JAVA_RUNTIME)
+            );
+            configuration.getAttributes().attribute(
+                    Category.CATEGORY_ATTRIBUTE,
+                    objects.named(Category.class, Category.DOCUMENTATION)
+            );
+            configuration.getAttributes().attribute(
+                    DocsType.DOCS_TYPE_ATTRIBUTE,
+                    objects.named(DocsType.class, DocsType.SOURCES)
+            );
+        });
+    }
+
+    private void registerModShadeComponent(
+            Project project,
+            Configuration modShadeRuntimeElements,
+            Configuration modShadeSourcesElements
+    ) {
+        AdhocComponentWithVariants component = softwareComponentFactory.adhoc(COMPONENT_NAME);
+        project.getComponents().add(component);
+        component.addVariantsFromConfiguration(modShadeRuntimeElements, variant ->
+                variant.mapToMavenScope("runtime")
+        );
+        component.addVariantsFromConfiguration(modShadeSourcesElements, variant ->
+                variant.mapToMavenScope("runtime")
+        );
     }
 
     private static void configureProjectDependencySources(

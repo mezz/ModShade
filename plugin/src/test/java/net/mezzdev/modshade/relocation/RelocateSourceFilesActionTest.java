@@ -4,6 +4,7 @@ import net.mezzdev.modshade.TestFixtures;
 
 import org.gradle.api.Project;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,8 @@ class RelocateSourceFilesActionTest {
         FileCollection dependencyFiles = project.files(dependencyJar.toFile());
         Property<String> relocationBase = project.getObjects().property(String.class);
         relocationBase.set("com.example.modshade");
-        return new RelocateSourceFilesAction(dependencyFiles, relocationBase, List.of());
+        ListProperty<String> relocationRules = project.getObjects().listProperty(String.class);
+        relocationRules.set(List.of());
+        return new RelocateSourceFilesAction(dependencyFiles, relocationBase, relocationRules);
     }
 }

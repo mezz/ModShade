@@ -15,10 +15,14 @@ description = "Gradle plugin for safely shading implementation-only libraries in
 dependencies {
     compileOnly("org.jspecify:jspecify:1.0.0")
 
-    implementation("org.ow2.asm:asm:9.10.1")
-    implementation("org.ow2.asm:asm-commons:9.10.1")
+    // Shadow 8.3.x keeps ModShade's minimum Gradle version at 8.3. Upgrading
+    // to Shadow 9.x raises that floor; update ModShadePlugin.MINIMUM_GRADLE_VERSION
+    // and the README compatibility docs together.
+    implementation("com.gradleup.shadow:shadow-gradle-plugin:8.3.11")
 
     testCompileOnly("org.jspecify:jspecify:1.0.0")
+    testImplementation("org.ow2.asm:asm:9.10.1")
+    testImplementation("org.ow2.asm:asm-commons:9.10.1")
     testImplementation(gradleTestKit())
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")

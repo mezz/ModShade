@@ -5,6 +5,7 @@ import org.gradle.api.Transformer;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.provider.Property;
+import org.gradle.api.provider.Provider;
 import org.jspecify.annotations.Nullable;
 
 import net.mezzdev.modshade.RelocationRule;
@@ -23,14 +24,14 @@ public final class RelocateSourceFilesAction implements Action<FileCopyDetails>,
 
     private final FileCollection dependencyFiles;
     private final Property<String> relocationBase;
-    private final List<RelocationRule> relocationRules;
+    private final Provider<List<String>> relocationRules;
 
     private transient @Nullable List<RelocationRule> finalRules;
 
     public RelocateSourceFilesAction(
             FileCollection dependencyFiles,
             Property<String> relocationBase,
-            List<RelocationRule> relocationRules
+            Provider<List<String>> relocationRules
     ) {
         this.dependencyFiles = dependencyFiles;
         this.relocationBase = relocationBase;
@@ -60,7 +61,7 @@ public final class RelocateSourceFilesAction implements Action<FileCopyDetails>,
         if (rules == null) {
             rules = ModShadeRelocationPlanner.planRelocations(
                             relocationBase.get(),
-                            relocationRules,
+                            parseRules(relocationRules.get()),
                             dependencyFiles.getFiles()
                     )
                     .stream()
@@ -69,6 +70,12 @@ public final class RelocateSourceFilesAction implements Action<FileCopyDetails>,
             finalRules = rules;
         }
         return rules;
+    }
+
+    private static List<RelocationRule> parseRules(List<String> relocationRules) {
+        return relocationRules.stream()
+                .map(ModShadeRelocationPlanner::parseRule)
+                .toList();
     }
 
     private static String relocatePath(String path, List<RelocationRule> rules) {
