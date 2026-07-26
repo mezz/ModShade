@@ -51,7 +51,9 @@ public final class VerifyModShadeArtifacts {
         List<String> forbiddenRuntimeReferences = arguments.all("forbidden-runtime-reference");
         List<String> requiredSourceTexts = arguments.all("required-source-text");
         List<String> forbiddenSourceTexts = arguments.all("forbidden-source-text");
+        List<String> developmentRuntimeClasspathEntryPrefixes = arguments.all("development-runtime-classpath-entry-prefix");
 
+        verifyDevelopmentRuntimeClasspath(developmentRuntimeClasspathEntryPrefixes);
         verifyRuntimeJar(
                 runtimeJar,
                 loaderMetadata,
@@ -63,6 +65,33 @@ public final class VerifyModShadeArtifacts {
         );
         verifySourcesJar(sourcesJar, modSource, relocatedPackage, requiredSourceTexts, forbiddenSourceTexts);
         verifyApiJar(apiJar, apiClass, relocatedLibraryClass);
+    }
+
+    private static void verifyDevelopmentRuntimeClasspath(List<String> requiredEntryPrefixes) {
+        if (requiredEntryPrefixes.isEmpty()) {
+            return;
+        }
+
+        String javaClasspath = System.getProperty("java.class.path", "");
+        Set<String> classpathEntryNames = new LinkedHashSet<>();
+        for (String entry : javaClasspath.split(File.pathSeparator)) {
+            if (!entry.isEmpty()) {
+                classpathEntryNames.add(new File(entry).getName());
+            }
+        }
+
+        for (String requiredEntryPrefix : requiredEntryPrefixes) {
+            boolean matched = classpathEntryNames.stream()
+                    .anyMatch(entryName -> entryName.startsWith(requiredEntryPrefix) && entryName.endsWith(".jar"));
+            if (!matched) {
+                throw new IllegalStateException(
+                        "Expected development runtime classpath to contain a jar starting with "
+                                + requiredEntryPrefix
+                                + ", got "
+                                + classpathEntryNames
+                );
+            }
+        }
     }
 
     private static void verifyRuntimeJar(

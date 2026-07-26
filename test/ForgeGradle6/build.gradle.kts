@@ -72,7 +72,7 @@ dependencies {
         version = "$forgeMinecraftVersion-$forgeVersion",
     )
 
-    modShade(project(":Library"))
+    modShadeImplementation(project(":Library"))
 }
 
 minecraft {
@@ -147,6 +147,7 @@ tasks.register<JavaExec>("verifyIntegration") {
     description = "Builds and verifies the Forge integration artifacts."
     dependsOn("assemble", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
+    classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
     args(
         "--diagnostic-jar", artifact("modshade-integration-forge-1.0.0-unshaded.jar"),
@@ -154,6 +155,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-forge-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-forge-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-forge-1.0.0-api.jar"),
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "META-INF/mods.toml",
         "--mod-class", "com/example/modshade/integration/forge/ForgeIntegrationMod.class",
         "--mod-source", "com/example/modshade/integration/forge/ForgeIntegrationMod.java",

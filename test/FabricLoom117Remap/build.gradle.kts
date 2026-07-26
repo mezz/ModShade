@@ -70,7 +70,7 @@ dependencies {
     add("mappings", "net.fabricmc:yarn:$fabricMinecraftVersion+build.10:v2")
     implementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
 
-    modShade(project(":Library"))
+    modShadeImplementation(project(":Library"))
 }
 
 loom {
@@ -153,6 +153,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "verifyIntermediaryApiIntegration",
     )
     classpath(verifierRuntimeClasspath)
+    classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
     args(
         "--diagnostic-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-unshaded.jar"),
@@ -160,6 +161,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api.jar"),
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "fabric.mod.json",
         "--mod-class", "com/example/modshade/integration/fabric/FabricIntegrationMod.class",
         "--mod-source", "com/example/modshade/integration/fabric/FabricIntegrationMod.java",
@@ -183,6 +185,7 @@ tasks.register<JavaExec>("verifyIntermediaryApiIntegration") {
     description = "Builds and verifies the optional Fabric API/intermediary ModShade artifacts."
     dependsOn("assemble", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
+    classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
     args(
         "--diagnostic-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api-intermediary-unshaded.jar"),
@@ -190,6 +193,7 @@ tasks.register<JavaExec>("verifyIntermediaryApiIntegration") {
         "--runtime-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api-intermediary.jar"),
         "--sources-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api-intermediary-sources.jar"),
         "--api-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api.jar"),
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--mod-class", "com/example/modshade/integration/fabric/api/FabricIntegrationApi.class",
         "--mod-source", "com/example/modshade/integration/fabric/api/FabricIntegrationApi.java",
         "--api-class", "com/example/modshade/integration/fabric/api/FabricIntegrationApi.class",

@@ -67,7 +67,7 @@ dependencies {
     add("minecraft", "com.mojang:minecraft:$fabricMinecraftVersion")
     implementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
 
-    modShade(project(":Library"))
+    modShadeImplementation(project(":Library"))
 }
 
 loom {
@@ -112,6 +112,7 @@ tasks.register<JavaExec>("verifyIntegration") {
     description = "Builds and verifies the Fabric Loom 1.17 non-remap integration artifacts."
     dependsOn("assemble", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
+    classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
     args(
         "--diagnostic-jar", artifact("modshade-integration-fabric-loom-non-remap-1.0.0-unshaded.jar"),
@@ -119,6 +120,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-fabric-loom-non-remap-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-fabric-loom-non-remap-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-fabric-loom-non-remap-1.0.0-api.jar"),
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "fabric.mod.json",
         "--mod-class", "com/example/modshade/integration/fabric/FabricIntegrationMod.class",
         "--mod-source", "com/example/modshade/integration/fabric/FabricIntegrationMod.java",

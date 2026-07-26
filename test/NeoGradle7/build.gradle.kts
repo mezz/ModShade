@@ -65,7 +65,7 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 dependencies {
     implementation("net.neoforged:neoforge:$neoforgeVersion")
 
-    modShade(project(":Library"))
+    modShadeImplementation(project(":Library"))
 }
 
 tasks.jar {
@@ -98,6 +98,7 @@ tasks.register<JavaExec>("verifyIntegration") {
     description = "Builds and verifies the NeoGradle integration artifacts."
     dependsOn("assemble", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
+    classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
     args(
         "--diagnostic-jar", artifact("modshade-integration-neogradle-1.0.0-unshaded.jar"),
@@ -105,6 +106,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-neogradle-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-neogradle-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-neogradle-1.0.0-api.jar"),
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "META-INF/neoforge.mods.toml",
         "--mod-class", "com/example/modshade/integration/neoforge/NeoGradleIntegrationMod.class",
         "--mod-source", "com/example/modshade/integration/neoforge/NeoGradleIntegrationMod.java",

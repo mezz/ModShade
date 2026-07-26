@@ -36,12 +36,23 @@ import java.util.Optional;
  * Main Gradle plugin implementation.
  */
 public final class ModShadePlugin implements Plugin<Project> {
-    public static final String CONFIGURATION_NAME = "modShade";
+    public static final String IMPLEMENTATION_CONFIGURATION_NAME = "modShadeImplementation";
+    public static final String COMPILE_ONLY_CONFIGURATION_NAME = "modShadeCompileOnly";
+    public static final String RUNTIME_ONLY_CONFIGURATION_NAME = "modShadeRuntimeOnly";
     public static final String EXTENSION_NAME = "modShade";
+    private static final String CLASSPATH_CONFIGURATION_NAME = "modShadeClasspath";
 
     @Override
     public void apply(Project project) {
-        Configuration modShadeConfiguration = createModShadeConfiguration(project);
+        Configuration modShadeImplementationConfiguration = createModShadeImplementationConfiguration(project);
+        Configuration modShadeCompileOnlyConfiguration = createModShadeCompileOnlyConfiguration(project);
+        Configuration modShadeRuntimeOnlyConfiguration = createModShadeRuntimeOnlyConfiguration(project);
+        Configuration modShadeClasspathConfiguration = createModShadeClasspathConfiguration(
+                project,
+                modShadeImplementationConfiguration,
+                modShadeCompileOnlyConfiguration,
+                modShadeRuntimeOnlyConfiguration
+        );
         ModShadeExtension extension = project.getExtensions().create(
                 EXTENSION_NAME,
                 ModShadeExtension.class,
@@ -50,13 +61,22 @@ public final class ModShadePlugin implements Plugin<Project> {
 
         project.getPlugins().withId("java", plugin -> {
             project.getConfigurations().named("compileOnly").configure(compileOnly ->
-                    compileOnly.extendsFrom(modShadeConfiguration)
+                    compileOnly.extendsFrom(modShadeImplementationConfiguration, modShadeCompileOnlyConfiguration)
+            );
+            project.getConfigurations().named("testCompileOnly").configure(testCompileOnly ->
+                    testCompileOnly.extendsFrom(modShadeImplementationConfiguration, modShadeCompileOnlyConfiguration)
+            );
+            project.getConfigurations().named("runtimeClasspath").configure(runtimeClasspath ->
+                    runtimeClasspath.extendsFrom(modShadeImplementationConfiguration, modShadeRuntimeOnlyConfiguration)
+            );
+            project.getConfigurations().named("testRuntimeClasspath").configure(testRuntimeClasspath ->
+                    testRuntimeClasspath.extendsFrom(modShadeImplementationConfiguration, modShadeRuntimeOnlyConfiguration)
             );
         });
 
-        configureModShadeJarTasks(project, modShadeConfiguration, extension);
-        configureModShadeSourcesJarTasks(project, modShadeConfiguration, extension);
-        registerReportTask(project, modShadeConfiguration, extension);
+        configureModShadeJarTasks(project, modShadeClasspathConfiguration, extension);
+        configureModShadeSourcesJarTasks(project, modShadeClasspathConfiguration, extension);
+        registerReportTask(project, modShadeClasspathConfiguration, extension);
     }
 
     private static void configureModShadeJarTasks(
@@ -193,12 +213,52 @@ public final class ModShadePlugin implements Plugin<Project> {
         });
     }
 
-    private static Configuration createModShadeConfiguration(Project project) {
+    private static Configuration createModShadeImplementationConfiguration(Project project) {
+        return project.getConfigurations().create(IMPLEMENTATION_CONFIGURATION_NAME, configuration -> {
+            configuration.setCanBeConsumed(false);
+            configuration.setCanBeResolved(false);
+            configuration.setDescription(
+                    "Plain libraries to shade and add to local Java compile/runtime classpaths."
+            );
+        });
+    }
+
+    private static Configuration createModShadeCompileOnlyConfiguration(Project project) {
+        return project.getConfigurations().create(COMPILE_ONLY_CONFIGURATION_NAME, configuration -> {
+            configuration.setCanBeConsumed(false);
+            configuration.setCanBeResolved(false);
+            configuration.setDescription(
+                    "Plain libraries to shade without adding them to local Java development runtime classpaths."
+            );
+        });
+    }
+
+    private static Configuration createModShadeRuntimeOnlyConfiguration(Project project) {
+        return project.getConfigurations().create(RUNTIME_ONLY_CONFIGURATION_NAME, configuration -> {
+            configuration.setCanBeConsumed(false);
+            configuration.setCanBeResolved(false);
+            configuration.setDescription(
+                    "Plain libraries to shade and add to local Java runtime classpaths only."
+            );
+        });
+    }
+
+    private static Configuration createModShadeClasspathConfiguration(
+            Project project,
+            Configuration modShadeImplementationConfiguration,
+            Configuration modShadeCompileOnlyConfiguration,
+            Configuration modShadeRuntimeOnlyConfiguration
+    ) {
         ObjectFactory objects = project.getObjects();
-        return project.getConfigurations().create(CONFIGURATION_NAME, configuration -> {
+        return project.getConfigurations().create(CLASSPATH_CONFIGURATION_NAME, configuration -> {
             configuration.setCanBeConsumed(false);
             configuration.setCanBeResolved(true);
-            configuration.setDescription("Plain libraries to relocate and shade into selected Minecraft mod jars.");
+            configuration.setDescription("Resolved classpath of plain libraries to relocate and shade into selected Minecraft mod jars.");
+            configuration.extendsFrom(
+                    modShadeImplementationConfiguration,
+                    modShadeCompileOnlyConfiguration,
+                    modShadeRuntimeOnlyConfiguration
+            );
             configuration.getAttributes().attribute(
                     Usage.USAGE_ATTRIBUTE,
                     objects.named(Usage.class, Usage.JAVA_RUNTIME)
@@ -228,7 +288,7 @@ public final class ModShadePlugin implements Plugin<Project> {
             ModShadeSourcesJar sourcesJarTask,
             Action<? super FileCopyDetails> relocateSourceFiles
     ) {
-        modShadeConfiguration.getDependencies().all(dependency -> {
+        modShadeConfiguration.getAllDependencies().all(dependency -> {
             if (dependency instanceof ProjectDependency projectDependency) {
                 resolveProjectDependency(project, projectDependency).ifPresent(dependencyProject ->
                         dependencyProject.getPlugins().withId("java", plugin -> {
