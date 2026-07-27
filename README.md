@@ -384,7 +384,8 @@ modShade {
 ## Inspecting ModShade configuration
 
 Use `modShadeReport` to see resolved dependency jars, detected mod jars,
-relocation rules, exclude patterns, and registered output tasks:
+relocation rules, exclude patterns, registered output tasks, and the
+dependency resources that remain after excludes:
 
 ```shell
 ./gradlew modShadeReport
