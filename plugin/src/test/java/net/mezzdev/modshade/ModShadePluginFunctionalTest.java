@@ -902,6 +902,63 @@ class ModShadePluginFunctionalTest {
     }
 
     @Test
+    void additionalRuntimeClasspathReceivesRuntimeVisibleModShadeConfigurations() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "implementation-library", "1.0");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "compile-library", "1.0");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "runtime-library", "1.0");
+        Files.writeString(tempDir.resolve("settings.gradle.kts"), "rootProject.name = \"simple-mod\"\n", StandardCharsets.UTF_8);
+        Files.writeString(tempDir.resolve("build.gradle.kts"), """
+                plugins {
+                    java
+                    id("net.mezzdev.modshade")
+                }
+
+                repositories {
+                    maven {
+                        url = uri("%s")
+                    }
+                }
+
+                configurations.create("additionalRuntimeClasspath") {
+                    isCanBeResolved = true
+                    isCanBeConsumed = false
+                }
+
+                dependencies {
+                    modShadeImplementation("net.mezzdev.fixture:implementation-library:1.0")
+                    modShadeCompileOnly("net.mezzdev.fixture:compile-library:1.0")
+                    modShadeRuntimeOnly("net.mezzdev.fixture:runtime-library:1.0")
+                }
+
+                abstract class AssertAdditionalRuntimeClasspath : DefaultTask() {
+                    @get:Classpath
+                    abstract val additionalRuntimeClasspath: ConfigurableFileCollection
+
+                    @TaskAction
+                    fun assertClasspath() {
+                        val names = additionalRuntimeClasspath.files.map { it.name }.toSet()
+                        check("implementation-library-1.0.jar" in names)
+                        check("runtime-library-1.0.jar" in names)
+                        check("compile-library-1.0.jar" !in names)
+                    }
+                }
+
+                tasks.register<AssertAdditionalRuntimeClasspath>("assertAdditionalRuntimeClasspath") {
+                    additionalRuntimeClasspath.from(configurations.named("additionalRuntimeClasspath"))
+                }
+                """.formatted(repo.toUri()), StandardCharsets.UTF_8);
+
+        BuildResult result = gradle(
+                "assertAdditionalRuntimeClasspath",
+                "--configuration-cache",
+                "--configuration-cache-problems=fail"
+        ).build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":assertAdditionalRuntimeClasspath")).getOutcome());
+    }
+
+    @Test
     void modShadeCompileOnlyConfigurationShadesWithoutRuntimeClasspath() throws IOException {
         Path repo = tempDir.resolve("repo");
         TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");

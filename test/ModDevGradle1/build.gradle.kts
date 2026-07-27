@@ -100,11 +100,24 @@ tasks.assemble {
 
 val verifierSourceSets = project(":Verifier").extensions.getByType<SourceSetContainer>()
 val verifierRuntimeClasspath = verifierSourceSets.named(SourceSet.MAIN_SOURCE_SET_NAME).map { it.runtimeClasspath }
+val additionalRuntimeClasspath = configurations.named("additionalRuntimeClasspath")
+
+tasks.register<JavaExec>("verifyAdditionalRuntimeClasspath") {
+    group = "verification"
+    description = "Verifies ModShade dependencies are available on ModDevGradle additionalRuntimeClasspath."
+    dependsOn(project(":Library").tasks.named("jar"), project(":Verifier").tasks.named("classes"))
+    classpath(verifierRuntimeClasspath)
+    classpath(additionalRuntimeClasspath)
+    mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
+    args(
+        "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
+    )
+}
 
 tasks.register<JavaExec>("verifyIntegration") {
     group = "verification"
     description = "Builds and verifies the ModDevGradle 1 integration artifacts."
-    dependsOn("assemble", project(":Verifier").tasks.named("classes"))
+    dependsOn("assemble", "verifyAdditionalRuntimeClasspath", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
     classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")

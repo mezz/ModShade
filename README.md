@@ -76,7 +76,11 @@ Use `modShadeCompileOnly(...)` when local runs and tests should not see the
 original library. Use `modShadeRuntimeOnly(...)` for libraries loaded
 reflectively or through a service loader.
 
-For a loader-specific or custom run configuration that does not use Java
+ModDevGradle's `additionalRuntimeClasspath` is wired automatically, because MDG
+dev runs load mods from class directories before `modShadeJar` has relocated
+dependencies.
+
+For other loader-specific or custom run configurations that do not use Java
 `runtimeClasspath`, extend that configuration from the runtime-visible ModShade
 buckets:
 

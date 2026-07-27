@@ -46,6 +46,7 @@ public final class ModShadePlugin implements Plugin<Project> {
     public static final String RUNTIME_ONLY_CONFIGURATION_NAME = "modShadeRuntimeOnly";
     public static final String EXTENSION_NAME = "modShade";
     private static final String CLASSPATH_CONFIGURATION_NAME = "modShadeClasspath";
+    private static final String ADDITIONAL_RUNTIME_CLASSPATH_CONFIGURATION_NAME = "additionalRuntimeClasspath";
     private static final String RUNTIME_ELEMENTS_CONFIGURATION_NAME = "modShadeRuntimeElements";
     private static final String SOURCES_ELEMENTS_CONFIGURATION_NAME = "modShadeSourcesElements";
     private static final String COMPONENT_NAME = "modShade";
@@ -96,6 +97,11 @@ public final class ModShadePlugin implements Plugin<Project> {
                     testRuntimeClasspath.extendsFrom(modShadeImplementationConfiguration, modShadeRuntimeOnlyConfiguration)
             );
         });
+        project.getConfigurations()
+                .matching(configuration -> ADDITIONAL_RUNTIME_CLASSPATH_CONFIGURATION_NAME.equals(configuration.getName()))
+                .configureEach(additionalRuntimeClasspath ->
+                        additionalRuntimeClasspath.extendsFrom(modShadeImplementationConfiguration, modShadeRuntimeOnlyConfiguration)
+                );
 
         configureModShadeJarTasks(project, modShadeClasspathConfiguration, extension);
         configureModShadeSourcesJarTasks(project, modShadeClasspathConfiguration, extension);

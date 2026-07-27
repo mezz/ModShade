@@ -36,6 +36,12 @@ public final class VerifyModShadeArtifacts {
             requireFile(new File(diagnosticJar));
         }
 
+        List<String> developmentRuntimeClasspathEntryPrefixes = arguments.all("development-runtime-classpath-entry-prefix");
+        verifyDevelopmentRuntimeClasspath(developmentRuntimeClasspathEntryPrefixes);
+        if (!arguments.has("runtime-jar") && !arguments.has("sources-jar") && !arguments.has("api-jar")) {
+            return;
+        }
+
         File runtimeJar = requireFile(new File(arguments.required("runtime-jar")));
         File sourcesJar = requireFile(new File(arguments.required("sources-jar")));
         File apiJar = requireFile(new File(arguments.required("api-jar")));
@@ -51,9 +57,7 @@ public final class VerifyModShadeArtifacts {
         List<String> forbiddenRuntimeReferences = arguments.all("forbidden-runtime-reference");
         List<String> requiredSourceTexts = arguments.all("required-source-text");
         List<String> forbiddenSourceTexts = arguments.all("forbidden-source-text");
-        List<String> developmentRuntimeClasspathEntryPrefixes = arguments.all("development-runtime-classpath-entry-prefix");
 
-        verifyDevelopmentRuntimeClasspath(developmentRuntimeClasspathEntryPrefixes);
         verifyRuntimeJar(
                 runtimeJar,
                 loaderMetadata,
@@ -366,6 +370,10 @@ public final class VerifyModShadeArtifacts {
 
         private List<String> all(String key) {
             return values.getOrDefault(key, List.of());
+        }
+
+        private boolean has(String key) {
+            return values.containsKey(key);
         }
     }
 }
