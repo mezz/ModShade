@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "net.mezzdev.gradle"
-version = "0.2.0"
+version = "0.3.0"
 description = "Gradle plugin for safely shading implementation-only libraries into Minecraft mod jars."
 
 dependencies {
