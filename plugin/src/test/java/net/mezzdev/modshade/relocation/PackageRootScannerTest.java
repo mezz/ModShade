@@ -31,4 +31,9 @@ class PackageRootScannerTest {
     void ignoresInvalidMultiReleaseJarEntries() {
         assertTrue(PackageRootScanner.inferPackageRoot("META-INF/versions/17").isEmpty());
     }
+
+    @Test
+    void ignoresJavaKeywordPackageSegments() {
+        assertTrue(PackageRootScanner.inferPackageRoot("com/class/example/Foo.class").isEmpty());
+    }
 }

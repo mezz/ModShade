@@ -2,6 +2,7 @@ package net.mezzdev.modshade.relocation;
 
 import org.gradle.api.GradleException;
 
+import javax.lang.model.SourceVersion;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
@@ -101,15 +102,7 @@ public final class PackageRootScanner {
     }
 
     private static boolean isJavaIdentifier(String segment) {
-        if (segment.isEmpty() || !Character.isJavaIdentifierStart(segment.charAt(0))) {
-            return false;
-        }
-        for (int i = 1; i < segment.length(); i++) {
-            if (!Character.isJavaIdentifierPart(segment.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
+        return SourceVersion.isIdentifier(segment) && !SourceVersion.isKeyword(segment);
     }
 
     private static boolean isJarFile(File file) {
