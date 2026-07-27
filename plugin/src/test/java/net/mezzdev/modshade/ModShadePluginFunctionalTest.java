@@ -343,6 +343,105 @@ class ModShadePluginFunctionalTest {
     }
 
     @Test
+    void modShadeJarPreservesSourceManifestAttributesWithoutMinimize() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");
+        writeBasicProject(repo, """
+                tasks.jar {
+                    manifest {
+                        attributes(mapOf(
+                            "Implementation-Title" to "SimpleMod",
+                            "Automatic-Module-Name" to "simple.mod"
+                        ))
+                    }
+                }
+
+                modShade {
+                    shadeJar()
+                }
+                """);
+
+        BuildResult result = gradle(
+                "modShadeJar",
+                "--configuration-cache",
+                "--configuration-cache-problems=fail"
+        ).build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+        Path shadedJar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarEntryCount(shadedJar, "META-INF/MANIFEST.MF", 1);
+        TestFixtures.assertManifestAttribute(shadedJar, "Implementation-Title", "SimpleMod");
+        TestFixtures.assertManifestAttribute(shadedJar, "Automatic-Module-Name", "simple.mod");
+    }
+
+    @Test
+    void modShadeJarPreservesSourceManifestAttributesWithMinimize() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        publishHelperLibrary(repo);
+        publishLibraryWithOptionalHelperUse(repo, true);
+        writeBasicProject(repo, """
+                tasks.jar {
+                    manifest {
+                        attributes(mapOf(
+                            "Implementation-Title" to "SimpleMod",
+                            "Automatic-Module-Name" to "simple.mod"
+                        ))
+                    }
+                }
+
+                val shadedJar = modShade.shadeJar()
+                shadedJar.configure {
+                    minimize()
+                }
+                """);
+
+        BuildResult result = gradle(
+                "modShadeJar",
+                "--configuration-cache",
+                "--configuration-cache-problems=fail"
+        ).build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+        Path shadedJar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarEntryCount(shadedJar, "META-INF/MANIFEST.MF", 1);
+        TestFixtures.assertManifestAttribute(shadedJar, "Implementation-Title", "SimpleMod");
+        TestFixtures.assertManifestAttribute(shadedJar, "Automatic-Module-Name", "simple.mod");
+    }
+
+    @Test
+    void modShadeJarPreservesSourceManifestAttributesWhenDuplicateStrategyFails() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");
+        writeBasicProject(repo, """
+                tasks.jar {
+                    manifest {
+                        attributes(mapOf(
+                            "Implementation-Title" to "SimpleMod",
+                            "Automatic-Module-Name" to "simple.mod"
+                        ))
+                    }
+                }
+
+                val shadedJar = modShade.shadeJar()
+                shadedJar.configure {
+                    duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+                }
+                """);
+
+        BuildResult result = gradle(
+                "modShadeJar",
+                "--configuration-cache",
+                "--configuration-cache-problems=fail"
+        ).build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+        Path shadedJar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarEntryCount(shadedJar, "META-INF/MANIFEST.MF", 1);
+        TestFixtures.assertManifestAttribute(shadedJar, "Implementation-Title", "SimpleMod");
+        TestFixtures.assertManifestAttribute(shadedJar, "Automatic-Module-Name", "simple.mod");
+    }
+
+    @Test
     void minimizeCanForceIncludeDependencyPattern() throws IOException {
         Path repo = tempDir.resolve("repo");
         publishExternalTransitiveLibrary(repo);

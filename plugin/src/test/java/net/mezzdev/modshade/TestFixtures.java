@@ -26,7 +26,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -190,6 +192,31 @@ public final class TestFixtures {
         try (ZipFile zipFile = new ZipFile(jar.toFile())) {
             ZipEntry entry = zipFile.getEntry(entryName);
 			assertNull(entry, () -> jar + " should not contain " + entryName);
+        }
+    }
+
+    public static void assertJarEntryCount(Path jar, String entryName, int expectedCount) throws IOException {
+        int count = 0;
+        try (ZipInputStream zipInput = new ZipInputStream(Files.newInputStream(jar))) {
+            ZipEntry entry;
+            while ((entry = zipInput.getNextEntry()) != null) {
+                if (entryName.equals(entry.getName())) {
+                    count++;
+                }
+            }
+        }
+        assertEquals(expectedCount, count, () -> jar + " should contain " + expectedCount + " entries named " + entryName);
+    }
+
+    public static void assertManifestAttribute(Path jar, String attributeName, String expectedValue) throws IOException {
+        try (JarFile jarFile = new JarFile(jar.toFile())) {
+            java.util.jar.Manifest manifest = jarFile.getManifest();
+            assertNotNull(manifest, () -> jar + " should contain META-INF/MANIFEST.MF");
+            assertEquals(
+                    expectedValue,
+                    manifest.getMainAttributes().getValue(attributeName),
+                    () -> jar + " manifest attribute " + attributeName
+            );
         }
     }
 
