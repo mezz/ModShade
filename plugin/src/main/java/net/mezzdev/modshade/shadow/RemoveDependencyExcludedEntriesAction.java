@@ -5,13 +5,15 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Task;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.RegularFile;
-import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 
 import net.mezzdev.modshade.RelocationRule;
+import net.mezzdev.modshade.archive.ArchiveEntryMatcher;
+import net.mezzdev.modshade.archive.ArchiveEntryMatcher.ArchiveRelocators;
 import net.mezzdev.modshade.relocation.ModShadeRelocationPlanner;
+import net.mezzdev.modshade.task.ModShadeJar;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,7 +27,6 @@ import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
@@ -38,24 +39,18 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private static final String MULTI_RELEASE_PREFIX = "META-INF/versions/";
-    private static final String SERVICES_PREFIX = "META-INF/services/";
-
     private final Provider<RegularFile> sourceArchiveFile;
-    private final ListProperty<String> excludes;
     private final FileCollection dependencyFiles;
     private final Property<String> relocationBase;
     private final Provider<List<String>> relocationRules;
 
     public RemoveDependencyExcludedEntriesAction(
             Provider<RegularFile> sourceArchiveFile,
-            ListProperty<String> excludes,
             FileCollection dependencyFiles,
             Property<String> relocationBase,
             Provider<List<String>> relocationRules
     ) {
         this.sourceArchiveFile = sourceArchiveFile;
-        this.excludes = excludes;
         this.dependencyFiles = dependencyFiles;
         this.relocationBase = relocationBase;
         this.relocationRules = relocationRules;
@@ -63,7 +58,7 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
 
     @Override
     public void execute(Task task) {
-        List<String> excludePatterns = excludes.get();
+        List<String> excludePatterns = ((ModShadeJar) task).getDependencyExcludes().get();
         if (excludePatterns.isEmpty() || !sourceArchiveFile.isPresent()) {
             return;
         }
@@ -72,8 +67,9 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
         Path archive = archiveTask.getArchiveFile().get().getAsFile().toPath();
         Path sourceArchive = sourceArchiveFile.get().getAsFile().toPath();
         List<RelocationRule> finalRules = finalRules();
+        ArchiveRelocators relocators = ArchiveEntryMatcher.relocators(finalRules);
         try {
-            removeExcludedEntries(archive, sourceArchive, excludePatterns, finalRules);
+            removeExcludedEntries(archive, sourceArchive, excludePatterns, relocators);
         } catch (IOException e) {
             throw new GradleException("Failed to remove excluded ModShade dependency entries from " + archive, e);
         }
@@ -96,12 +92,9 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
             Path archive,
             Path sourceArchive,
             List<String> excludePatterns,
-            List<RelocationRule> relocationRules
+            ArchiveRelocators relocators
     ) throws IOException {
-        Set<String> sourceEntries = readSourceEntries(sourceArchive, relocationRules);
-        List<Pattern> excludes = excludePatterns.stream()
-                .map(RemoveDependencyExcludedEntriesAction::compileGlob)
-                .toList();
+        Set<String> sourceEntries = readSourceEntries(sourceArchive, relocators);
         Path tempArchive = Files.createTempFile(archive.getParent(), archive.getFileName().toString(), ".filtered");
         boolean completed = false;
         try {
@@ -112,7 +105,7 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
                 Enumeration<JarEntry> entries = input.entries();
                 while (entries.hasMoreElements()) {
                     JarEntry inputEntry = entries.nextElement();
-                    if (inputEntry.isDirectory() || shouldRemove(inputEntry.getName(), sourceEntries, excludes, relocationRules)) {
+                    if (inputEntry.isDirectory() || shouldRemove(inputEntry.getName(), sourceEntries, excludePatterns, relocators)) {
                         continue;
                     }
 
@@ -134,7 +127,7 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
         }
     }
 
-    private static Set<String> readSourceEntries(Path sourceArchive, List<RelocationRule> relocationRules) throws IOException {
+    private static Set<String> readSourceEntries(Path sourceArchive, ArchiveRelocators relocators) throws IOException {
         Set<String> sourceEntries = new LinkedHashSet<>();
         try (JarFile jarFile = new JarFile(sourceArchive.toFile())) {
             Enumeration<JarEntry> entries = jarFile.entries();
@@ -142,7 +135,7 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
                 JarEntry entry = entries.nextElement();
                 if (!entry.isDirectory()) {
                     sourceEntries.add(entry.getName());
-                    sourceEntries.add(relocateEntryName(entry.getName(), relocationRules));
+                    sourceEntries.add(ArchiveEntryMatcher.relocateEntryName(entry.getName(), relocators));
                 }
             }
         }
@@ -152,125 +145,13 @@ public final class RemoveDependencyExcludedEntriesAction implements Action<Task>
     private static boolean shouldRemove(
             String entryName,
             Set<String> sourceEntries,
-            List<Pattern> excludes,
-            List<RelocationRule> relocationRules
+            List<String> excludes,
+            ArchiveRelocators relocators
     ) {
         if (sourceEntries.contains(entryName)) {
             return false;
         }
 
-        if (matchesAny(excludes, entryName)) {
-            return true;
-        }
-
-        String unrelocatedEntryName = unrelocateEntryName(entryName, relocationRules);
-        return !entryName.equals(unrelocatedEntryName) && matchesAny(excludes, unrelocatedEntryName);
-    }
-
-    private static boolean matchesAny(List<Pattern> patterns, String entryName) {
-        for (Pattern pattern : patterns) {
-            if (pattern.matcher(entryName).matches()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String relocateEntryName(String entryName, List<RelocationRule> rules) {
-        if (entryName.startsWith(SERVICES_PREFIX)) {
-            return SERVICES_PREFIX + relocateDottedName(entryName.substring(SERVICES_PREFIX.length()), rules);
-        }
-
-        String normalizedEntryName = normalizeMultiReleaseEntryName(entryName);
-        String relocatedEntryName = relocateInternalName(normalizedEntryName, rules);
-        if (normalizedEntryName.equals(relocatedEntryName)) {
-            return entryName;
-        }
-        return entryName.substring(0, entryName.length() - normalizedEntryName.length()) + relocatedEntryName;
-    }
-
-    private static String unrelocateEntryName(String entryName, List<RelocationRule> rules) {
-        if (entryName.startsWith(SERVICES_PREFIX)) {
-            return SERVICES_PREFIX + unrelocateDottedName(entryName.substring(SERVICES_PREFIX.length()), rules);
-        }
-
-        String normalizedEntryName = normalizeMultiReleaseEntryName(entryName);
-        String unrelocatedEntryName = unrelocateInternalName(normalizedEntryName, rules);
-        if (normalizedEntryName.equals(unrelocatedEntryName)) {
-            return entryName;
-        }
-        return entryName.substring(0, entryName.length() - normalizedEntryName.length()) + unrelocatedEntryName;
-    }
-
-    private static String normalizeMultiReleaseEntryName(String entryName) {
-        if (!entryName.startsWith(MULTI_RELEASE_PREFIX)) {
-            return entryName;
-        }
-
-        String remainder = entryName.substring(MULTI_RELEASE_PREFIX.length());
-        int slash = remainder.indexOf('/');
-        if (slash < 0) {
-            return entryName;
-        }
-        return remainder.substring(slash + 1);
-    }
-
-    private static String relocateDottedName(String dottedName, List<RelocationRule> rules) {
-        return relocateInternalName(dottedName.replace('.', '/'), rules).replace('/', '.');
-    }
-
-    private static String unrelocateDottedName(String dottedName, List<RelocationRule> rules) {
-        return unrelocateInternalName(dottedName.replace('.', '/'), rules).replace('/', '.');
-    }
-
-    private static String relocateInternalName(String internalName, List<RelocationRule> rules) {
-        for (RelocationRule rule : rules) {
-            String fromInternalName = rule.fromPackage().replace('.', '/');
-            if (internalName.equals(fromInternalName)) {
-                return rule.toPackage().replace('.', '/');
-            }
-            if (internalName.startsWith(fromInternalName + "/")) {
-                return rule.toPackage().replace('.', '/') + internalName.substring(fromInternalName.length());
-            }
-        }
-        return internalName;
-    }
-
-    private static String unrelocateInternalName(String internalName, List<RelocationRule> rules) {
-        for (RelocationRule rule : rules) {
-            String toInternalName = rule.toPackage().replace('.', '/');
-            if (internalName.equals(toInternalName)) {
-                return rule.fromPackage().replace('.', '/');
-            }
-            if (internalName.startsWith(toInternalName + "/")) {
-                return rule.fromPackage().replace('.', '/') + internalName.substring(toInternalName.length());
-            }
-        }
-        return internalName;
-    }
-
-    private static Pattern compileGlob(String pattern) {
-        StringBuilder regex = new StringBuilder();
-        regex.append('^');
-        for (int i = 0; i < pattern.length(); i++) {
-            char c = pattern.charAt(i);
-            if (c == '*') {
-                if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '*') {
-                    regex.append(".*");
-                    i++;
-                } else {
-                    regex.append("[^/]*");
-                }
-            } else if (c == '?') {
-                regex.append("[^/]");
-            } else {
-                if ("\\.[]{}()+-^$|".indexOf(c) >= 0) {
-                    regex.append('\\');
-                }
-                regex.append(c);
-            }
-        }
-        regex.append('$');
-        return Pattern.compile(regex.toString());
+        return ArchiveEntryMatcher.matchesEntry(excludes, entryName, relocators);
     }
 }

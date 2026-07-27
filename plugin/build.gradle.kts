@@ -19,6 +19,7 @@ dependencies {
     // to Shadow 9.x raises that floor; update ModShadePlugin.MINIMUM_GRADLE_VERSION
     // and the README compatibility docs together.
     implementation("com.gradleup.shadow:shadow-gradle-plugin:8.3.11")
+    implementation("org.apache.ant:ant:1.10.15")
 
     testCompileOnly("org.jspecify:jspecify:1.0.0")
     testImplementation("org.ow2.asm:asm:9.10.1")

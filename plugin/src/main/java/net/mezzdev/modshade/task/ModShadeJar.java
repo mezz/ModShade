@@ -11,8 +11,10 @@ import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.java.archives.Attributes;
 import org.gradle.api.java.archives.Manifest;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.CacheableTask;
+import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitive;
@@ -68,6 +70,9 @@ public abstract class ModShadeJar extends ShadowJar {
     public RegularFileProperty getSourceArchiveFile() {
         return sourceArchiveFile;
     }
+
+    @Input
+    public abstract ListProperty<String> getDependencyExcludes();
 
     private static final class MergeSourceManifestAction implements Action<Task>, Serializable {
         @Serial

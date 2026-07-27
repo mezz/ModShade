@@ -128,7 +128,7 @@ public final class ModShadePlugin implements Plugin<Project> {
             task.mergeServiceFiles();
             task.getInputs().property("modShade.relocationBase", extension.getRelocationBase());
             task.getInputs().property("modShade.relocationRules", extension.getFormattedRelocationRules());
-            task.getInputs().property("modShade.excludes", extension.getExcludes());
+            task.getDependencyExcludes().set(extension.getExcludes());
             task.getInputs().property("modShade.failOnModJars", extension.getFailOnModJars());
             task.getInputs()
                     .files(modShadeDependencyFiles)
@@ -143,7 +143,6 @@ public final class ModShadePlugin implements Plugin<Project> {
             ));
             task.doLast(new RemoveDependencyExcludedEntriesAction(
                     task.getSourceArchiveFile(),
-                    extension.getExcludes(),
                     modShadeDependencyFiles,
                     extension.getRelocationBase(),
                     extension.getFormattedRelocationRules()

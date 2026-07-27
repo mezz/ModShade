@@ -32,7 +32,10 @@ public abstract class ModShadeExtension {
             "META-INF/maven/**",
             "META-INF/*.SF",
             "META-INF/*.DSA",
-            "META-INF/*.RSA",
+            "META-INF/*.RSA"
+    );
+
+    public static final List<String> MOD_METADATA_EXCLUDES = List.of(
             "fabric.mod.json",
             "quilt.mod.json",
             "META-INF/mods.toml",
@@ -62,10 +65,10 @@ public abstract class ModShadeExtension {
         this.modShadeSourcesElements = modShadeSourcesElements;
         this.relocationBase = project.getObjects().property(String.class);
         this.relocationBase.convention(project.provider(() -> defaultRelocationBase(project)));
-        this.excludes = project.getObjects().listProperty(String.class);
-        this.excludes.set(DEFAULT_EXCLUDES);
         this.failOnModJars = project.getObjects().property(Boolean.class);
         this.failOnModJars.convention(true);
+        this.excludes = project.getObjects().listProperty(String.class);
+        this.excludes.convention(project.provider(() -> defaultExcludes(failOnModJars.get())));
         this.relocationRules = project.getObjects().listProperty(String.class);
         this.relocationRules.convention(List.of());
     }
@@ -89,7 +92,9 @@ public abstract class ModShadeExtension {
     }
 
     public void exclude(String pattern) {
-        excludes.add(pattern);
+        List<String> updatedExcludes = new ArrayList<>(excludes.get());
+        updatedExcludes.add(pattern);
+        excludes.set(List.copyOf(updatedExcludes));
     }
 
     public void relocate(String fromPackage, String toPackage) {
@@ -262,5 +267,15 @@ public abstract class ModShadeExtension {
             return "modshade";
         }
         return sanitizedGroup + ".modshade";
+    }
+
+    private static List<String> defaultExcludes(boolean failOnModJars) {
+        if (failOnModJars) {
+            return DEFAULT_EXCLUDES;
+        }
+
+        List<String> excludes = new ArrayList<>(DEFAULT_EXCLUDES);
+        excludes.addAll(MOD_METADATA_EXCLUDES);
+        return List.copyOf(excludes);
     }
 }

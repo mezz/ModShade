@@ -120,6 +120,8 @@ modShade {
 ```
 
 This opt-out does not make shading other mods a correct distribution strategy.
+When the guard is disabled, common mod-loader metadata files are still excluded
+from shaded dependency contents.
 
 ## Minimization
 
@@ -333,9 +335,10 @@ rules you declared.
 
 ## Excludes
 
-Default excludes remove Maven metadata, invalid signatures, and mod-loader
-metadata from shaded dependency contents. Add project-specific excludes with
-`exclude(...)`:
+Default excludes remove Maven metadata and invalid signatures from shaded
+dependency contents. When `failOnModJars.set(false)`, ModShade also excludes
+common mod-loader metadata from dependency contents. Add project-specific
+excludes with `exclude(...)`:
 
 ```kotlin
 modShade {
@@ -344,8 +347,39 @@ modShade {
 }
 ```
 
-`exclude(...)` adds to the defaults. `excludes.set(...)` replaces the whole
-exclude list.
+`exclude(...)` is shorthand for `excludes.add(...)`: it keeps the current list
+and appends one pattern. `excludes.set(...)` replaces the entire list, including
+defaults and any patterns added earlier. If you use `set`, include every pattern
+you still want. If you call `exclude(...)` after `excludes.set(...)`, it appends
+to that replacement list.
+
+The default excludes are intentionally narrow:
+
+| Pattern | Why it is excluded by default |
+| --- | --- |
+| `META-INF/maven/**` | Maven coordinates and `pom.properties` describe the original library artifact. After shading, that metadata is stale and can confuse scanners or runtime introspection. |
+| `META-INF/*.SF` | JAR signature metadata is invalid after unpacking, relocating, and repacking classes. |
+| `META-INF/*.DSA` | Same as `.SF`: signature block data no longer matches the shaded jar. |
+| `META-INF/*.RSA` | Same as `.SF`: signature block data no longer matches the shaded jar. |
+| `fabric.mod.json`, `quilt.mod.json`, `META-INF/mods.toml`, `META-INF/neoforge.mods.toml`, `mcmod.info` | Loader metadata from a dependency must not make the final jar look like it contains another mod. These patterns are only defaults when `failOnModJars.set(false)`; with the default guard enabled, dependencies containing this metadata fail before shading. |
+
+To replace the defaults completely:
+
+```kotlin
+modShade {
+    excludes.set(emptyList())
+}
+```
+
+Or remove one default while keeping the rest:
+
+```kotlin
+import net.mezzdev.modshade.ModShadeExtension
+
+modShade {
+    excludes.set(ModShadeExtension.DEFAULT_EXCLUDES.filterNot { it == "META-INF/maven/**" })
+}
+```
 
 ## Inspecting ModShade configuration
 
