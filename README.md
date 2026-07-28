@@ -22,7 +22,7 @@ still disable it.
 ```kotlin
 plugins {
     java
-    id("net.mezzdev.modshade") version "0.3.0"
+    id("net.mezzdev.modshade") version "0.4.0"
 }
 
 dependencies {
