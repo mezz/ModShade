@@ -57,6 +57,164 @@ build/libs/<archivesName>-<version>-sources-unshaded.jar
 The normal runtime and sources classifiers are produced by ModShade. The
 `unshaded` jars are the original loader output and are kept for debugging.
 
+## Migrating common Shadow setups to ModShade
+
+ModShade builds on Shadow for runtime jar shading, but moves the mod-specific
+parts into the `modShade` extension and dependency configurations. These are
+common Shadow patterns and their ModShade equivalents. The examples use Kotlin
+DSL; add the usual type imports for `ShadowJar`, `Jar`,
+`AbstractArchiveTask`, `Bundling`, `ModShadeJar`, and `ModShadeSourcesJar` as
+needed.
+
+Shade a library dependency:
+
+```kotlin
+// Shadow
+dependencies {
+    implementation("net.mezzdev:deduplicating-runner:0.1.0")
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+    configurations = listOf(project.configurations.runtimeClasspath.get())
+}
+```
+
+```kotlin
+// ModShade
+dependencies {
+    modShadeImplementation("net.mezzdev:deduplicating-runner:0.1.0")
+}
+
+modShade {
+    shadeJar()
+    shadeSourcesJar()
+}
+```
+
+Shade into a loader-produced archive:
+
+```kotlin
+// Shadow
+tasks.named<ShadowJar>("shadowJar") {
+    val remapJar = tasks.named<AbstractArchiveTask>("remapJar")
+    from(zipTree(remapJar.flatMap { it.archiveFile }))
+    archiveClassifier.set("")
+}
+```
+
+```kotlin
+// ModShade
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
+modShade {
+    shadeJar(tasks.named<AbstractArchiveTask>("remapJar"))
+}
+```
+
+For default Fabric, Forge, NeoForge, VanillaGradle, and Java plugin setups,
+`shadeJar()` chooses the final runtime archive automatically. `ModShadeJar`
+also has Shadow's regular `from(...)` API, but `fromArchive(...)` is the
+ModShade API for selecting the mod archive that should receive shaded
+dependencies.
+
+Relocate packages:
+
+```kotlin
+// Shadow
+tasks.named<ShadowJar>("shadowJar") {
+    relocate("com.example.library", "net.example.mod.libs.example")
+}
+```
+
+```kotlin
+// ModShade
+modShade {
+    relocate("com.example.library", "net.example.mod.libs.example")
+}
+```
+
+If explicit relocation rules are not needed, ModShade can infer dependency
+package roots and relocate them under the project group, or under a configured
+base package:
+
+```kotlin
+modShade {
+    relocationBase.set("net.example.mod.libs")
+}
+```
+
+Minimize shaded dependencies:
+
+```kotlin
+// Shadow
+tasks.named<ShadowJar>("shadowJar") {
+    minimize {
+        exclude(dependency("com.example:reflective-library:.*"))
+    }
+}
+```
+
+```kotlin
+// ModShade
+val shadedJar = modShade.shadeJar()
+
+shadedJar.configure {
+    minimize {
+        exclude(dependency("com.example:reflective-library:.*"))
+    }
+}
+```
+
+Embed another project's shaded output in an aggregate or platform jar:
+
+```kotlin
+// Manual Gradle plumbing
+dependencies {
+    runtimeOnly(project(":Common")) {
+        attributes {
+            attribute(
+                Bundling.BUNDLING_ATTRIBUTE,
+                objects.named(Bundling.SHADOWED)
+            )
+        }
+    }
+}
+
+tasks.named<Jar>("jar") {
+    val commonModShadeJar =
+        project(":Common").tasks.named<ModShadeJar>("modShadeJar")
+    from(zipTree(commonModShadeJar.flatMap { it.archiveFile }))
+}
+
+tasks.named<Jar>("sourcesJar") {
+    val commonModShadeSourcesJar =
+        project(":Common").tasks.named<ModShadeSourcesJar>("modShadeSourcesJar")
+    from(zipTree(commonModShadeSourcesJar.flatMap { it.archiveFile })) {
+        exclude("META-INF/MANIFEST.MF", "MANIFEST.MF")
+    }
+}
+```
+
+```kotlin
+// ModShade
+val commonShade = modShade.shadedProject(project(":Common"))
+
+dependencies {
+    runtimeOnly(commonShade.runtimeDependency())
+}
+
+tasks.named<Jar>("jar") {
+    from(commonShade.runtimeContents())
+}
+
+tasks.named<Jar>("sourcesJar") {
+    from(commonShade.sourcesContents())
+}
+```
+
+`commonShade.sourcesContents()` unpacks the producer's registered shaded
+sources jar and excludes copied manifests automatically.
+
 ## Dependency configurations
 
 Every ModShade dependency configuration means "bundle this library into the
