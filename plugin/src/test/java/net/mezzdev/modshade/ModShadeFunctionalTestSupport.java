@@ -310,10 +310,33 @@ abstract class ModShadeFunctionalTestSupport {
             List<Path> classpath,
             Map<String, String> extraTextEntries
     ) throws IOException {
+        return publishFixtureLibrary(
+                repo,
+                "net.mezzdev.fixture",
+                artifact,
+                "1.0",
+                sourceText,
+                dependencies,
+                classpath,
+                extraTextEntries
+        );
+    }
+
+    protected Path publishFixtureLibrary(
+            Path repo,
+            String group,
+            String artifact,
+            String version,
+            String sourceText,
+            List<MavenDependency> dependencies,
+            List<Path> classpath,
+            Map<String, String> extraTextEntries
+    ) throws IOException {
         Path workDir = Files.createTempDirectory(tempDir, "fixture-" + artifact);
         String sourceFileName = switch (artifact) {
             case "helper" -> "FixtureHelper.java";
             case "external-transitive" -> "FixtureExternalTransitive.java";
+            case "deduplicating-runner" -> "DeduplicatingRunner.java";
             default -> "FixtureLibrary.java";
         };
         Path source = workDir.resolve("src").resolve(sourceFileName);
@@ -322,8 +345,6 @@ abstract class ModShadeFunctionalTestSupport {
         Path classesDir = workDir.resolve("classes");
         TestFixtures.compileJavaSources(classesDir, List.of(source), classpath);
 
-        String group = "net.mezzdev.fixture";
-        String version = "1.0";
         Path moduleDir = repo.resolve(group.replace('.', '/')).resolve(artifact).resolve(version);
         Files.createDirectories(moduleDir);
 

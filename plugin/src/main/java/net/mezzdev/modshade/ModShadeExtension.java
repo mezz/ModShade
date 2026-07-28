@@ -53,6 +53,8 @@ public abstract class ModShadeExtension {
     private final Set<String> modShadeJarTaskNames = new LinkedHashSet<>();
     private final Set<String> publishedRuntimeTaskNames = new LinkedHashSet<>();
     private final Set<String> publishedSourcesTaskNames = new LinkedHashSet<>();
+    private final List<TaskProvider<ModShadeJar>> runtimeJarTasks = new ArrayList<>();
+    private final List<TaskProvider<ModShadeSourcesJar>> sourcesJarTasks = new ArrayList<>();
 
     @Inject
     public ModShadeExtension(
@@ -158,6 +160,18 @@ public abstract class ModShadeExtension {
         return task;
     }
 
+    public ShadedProject shadedProject(Project producerProject) {
+        return new ShadedProject(project, producerProject);
+    }
+
+    public List<TaskProvider<ModShadeJar>> getRuntimeJarTasks() {
+        return List.copyOf(runtimeJarTasks);
+    }
+
+    public List<TaskProvider<ModShadeSourcesJar>> getSourcesJarTasks() {
+        return List.copyOf(sourcesJarTasks);
+    }
+
     void markModShadeJarTask(String taskName) {
         modShadeJarTaskNames.add(taskName);
     }
@@ -189,12 +203,14 @@ public abstract class ModShadeExtension {
 
     private void publishRuntimeArtifact(TaskProvider<ModShadeJar> task) {
         if (publishedRuntimeTaskNames.add(task.getName())) {
+            runtimeJarTasks.add(task);
             modShadeRuntimeElements.getOutgoing().artifact(task);
         }
     }
 
     private void publishSourcesArtifact(TaskProvider<ModShadeSourcesJar> task) {
         if (publishedSourcesTaskNames.add(task.getName())) {
+            sourcesJarTasks.add(task);
             modShadeSourcesElements.getOutgoing().artifact(task);
         }
     }

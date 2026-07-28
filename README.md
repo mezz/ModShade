@@ -279,6 +279,65 @@ jars, with your publishing plugin as usual.
 `tasks.remapJar`, `tasks.reobfJar`, or `tasks.sourcesJar`, update that wiring to
 use the ModShade task providers instead.
 
+## Embedding shaded project outputs in aggregate/platform jars
+
+Aggregate or platform projects can embed another project's ModShade output
+without repeating project-dependency attributes or `zipTree` plumbing.
+
+In the producer project, register the shaded runtime and sources outputs. Custom
+ModShade task names are supported:
+
+```kotlin
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
+modShade {
+    shadeJar("shadeCommonRuntime", tasks.named<AbstractArchiveTask>("jar"))
+    shadeSourcesJar("shadeCommonSources", tasks.named<AbstractArchiveTask>("sourcesJar"))
+}
+```
+
+In the consumer project, create a shaded-project handle and wire it into the
+runtime classpath and aggregate archives:
+
+```kotlin
+import org.gradle.api.tasks.bundling.Jar
+
+val commonShade = modShade.shadedProject(project(":Common"))
+
+dependencies {
+    runtimeOnly(commonShade.runtimeDependency())
+}
+
+tasks.named<Jar>("jar") {
+    from(commonShade.runtimeContents())
+}
+
+tasks.named<Jar>("sourcesJar") {
+    from(commonShade.sourcesContents())
+}
+```
+
+The helper requests the producer's `modShadeRuntimeElements` variant with
+`Bundling.SHADOWED`, unpacks the registered ModShade archive providers with
+provider-backed `zipTree`, and excludes `META-INF/MANIFEST.MF` and
+`MANIFEST.MF` when embedding sources.
+
+The same wiring can be expressed without nested `dependencies` or task blocks:
+
+```kotlin
+import org.gradle.api.tasks.bundling.Jar
+
+val commonShade = modShade.shadedProject(project(":Common"))
+
+commonShade.addRuntimeDependencyTo(configurations.runtimeOnly)
+commonShade.runtimeInto(tasks.named<Jar>("jar"))
+commonShade.sourcesInto(tasks.named<Jar>("sourcesJar"))
+```
+
+If the producer does not apply ModShade, or has not registered the requested
+runtime or sources output, the helper fails with a message naming the missing
+producer project and output type.
+
 ## Explicit archive tasks
 
 Pass archive tasks explicitly when your build uses custom final artifact tasks:
