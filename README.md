@@ -62,8 +62,7 @@ The normal runtime and sources classifiers are produced by ModShade. The
 ModShade builds on Shadow for runtime jar shading, but moves the mod-specific
 parts into the `modShade` extension and dependency configurations. These are
 common Shadow patterns and their ModShade equivalents. The examples use Kotlin
-DSL; add the usual type imports for `ShadowJar`, `Jar`,
-`AbstractArchiveTask`, `Bundling`, `ModShadeJar`, and `ModShadeSourcesJar` as
+DSL; add the usual type imports for `ShadowJar` and `AbstractArchiveTask` as
 needed.
 
 Shade a library dependency:
@@ -164,56 +163,6 @@ shadedJar.configure {
     }
 }
 ```
-
-Embed another project's shaded output in an aggregate or platform jar:
-
-```kotlin
-// Manual Gradle plumbing
-dependencies {
-    runtimeOnly(project(":Common")) {
-        attributes {
-            attribute(
-                Bundling.BUNDLING_ATTRIBUTE,
-                objects.named(Bundling.SHADOWED)
-            )
-        }
-    }
-}
-
-tasks.named<Jar>("jar") {
-    val commonModShadeJar =
-        project(":Common").tasks.named<ModShadeJar>("modShadeJar")
-    from(zipTree(commonModShadeJar.flatMap { it.archiveFile }))
-}
-
-tasks.named<Jar>("sourcesJar") {
-    val commonModShadeSourcesJar =
-        project(":Common").tasks.named<ModShadeSourcesJar>("modShadeSourcesJar")
-    from(zipTree(commonModShadeSourcesJar.flatMap { it.archiveFile })) {
-        exclude("META-INF/MANIFEST.MF", "MANIFEST.MF")
-    }
-}
-```
-
-```kotlin
-// ModShade
-val commonShade = modShade.shadedProject(project(":Common"))
-
-dependencies {
-    runtimeOnly(commonShade.runtimeDependency())
-}
-
-tasks.named<Jar>("jar") {
-    from(commonShade.runtimeContents())
-}
-
-tasks.named<Jar>("sourcesJar") {
-    from(commonShade.sourcesContents())
-}
-```
-
-`commonShade.sourcesContents()` unpacks the producer's registered shaded
-sources jar and excludes copied manifests automatically.
 
 ## Dependency configurations
 
@@ -436,65 +385,6 @@ jars, with your publishing plugin as usual.
 `sources-unshaded`. If your build already publishes or uploads `tasks.jar`,
 `tasks.remapJar`, `tasks.reobfJar`, or `tasks.sourcesJar`, update that wiring to
 use the ModShade task providers instead.
-
-## Embedding shaded project outputs in aggregate/platform jars
-
-Aggregate or platform projects can embed another project's ModShade output
-without repeating project-dependency attributes or `zipTree` plumbing.
-
-In the producer project, register the shaded runtime and sources outputs. Custom
-ModShade task names are supported:
-
-```kotlin
-import org.gradle.api.tasks.bundling.AbstractArchiveTask
-
-modShade {
-    shadeJar("shadeCommonRuntime", tasks.named<AbstractArchiveTask>("jar"))
-    shadeSourcesJar("shadeCommonSources", tasks.named<AbstractArchiveTask>("sourcesJar"))
-}
-```
-
-In the consumer project, create a shaded-project handle and wire it into the
-runtime classpath and aggregate archives:
-
-```kotlin
-import org.gradle.api.tasks.bundling.Jar
-
-val commonShade = modShade.shadedProject(project(":Common"))
-
-dependencies {
-    runtimeOnly(commonShade.runtimeDependency())
-}
-
-tasks.named<Jar>("jar") {
-    from(commonShade.runtimeContents())
-}
-
-tasks.named<Jar>("sourcesJar") {
-    from(commonShade.sourcesContents())
-}
-```
-
-The helper requests the producer's `modShadeRuntimeElements` variant with
-`Bundling.SHADOWED`, unpacks the registered ModShade archive providers with
-provider-backed `zipTree`, and excludes `META-INF/MANIFEST.MF` and
-`MANIFEST.MF` when embedding sources.
-
-The same wiring can be expressed without nested `dependencies` or task blocks:
-
-```kotlin
-import org.gradle.api.tasks.bundling.Jar
-
-val commonShade = modShade.shadedProject(project(":Common"))
-
-commonShade.addRuntimeDependencyTo(configurations.runtimeOnly)
-commonShade.runtimeInto(tasks.named<Jar>("jar"))
-commonShade.sourcesInto(tasks.named<Jar>("sourcesJar"))
-```
-
-If the producer does not apply ModShade, or has not registered the requested
-runtime or sources output, the helper fails with a message naming the missing
-producer project and output type.
 
 ## Explicit archive tasks
 
