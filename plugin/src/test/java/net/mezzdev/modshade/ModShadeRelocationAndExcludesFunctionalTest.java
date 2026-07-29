@@ -161,68 +161,6 @@ class ModShadeRelocationAndExcludesFunctionalTest extends ModShadeFunctionalTest
     }
 
     @Test
-    void canOptOutOfModJarGuardForLegacyPlainLibraryArtifacts() throws IOException {
-        Path repo = tempDir.resolve("repo");
-        TestFixtures.publishLibrary(
-                repo,
-                "net.mezzdev.fixture",
-                "library",
-                "1.0",
-                List.of("quilt.mod.json", "mcmod.info", "assets/fixture-library/hidden.txt")
-        );
-        writeBasicProject(repo, """
-                tasks.register<net.mezzdev.modshade.task.ModShadeJar>("modShadeJar") {
-                    fromJar()
-                }
-
-                modShade {
-                    failOnModJars.set(false)
-                    exclude("assets/fixture-library/**")
-                }
-                """);
-
-        BuildResult result = gradle("modShadeJar").build();
-
-        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
-        Path jar = defaultShadedJar();
-        TestFixtures.assertJarContains(jar, DEFAULT_RELOCATED_LIBRARY_CLASS);
-        TestFixtures.assertJarDoesNotContain(jar, "quilt.mod.json");
-        TestFixtures.assertJarDoesNotContain(jar, "mcmod.info");
-        TestFixtures.assertJarDoesNotContain(jar, "assets/fixture-library/hidden.txt");
-    }
-
-    @Test
-    void excludesSetReplacesConditionalModMetadataExcludes() throws IOException {
-        Path repo = tempDir.resolve("repo");
-        TestFixtures.publishLibrary(
-                repo,
-                "net.mezzdev.fixture",
-                "library",
-                "1.0",
-                List.of("quilt.mod.json", "mcmod.info", "assets/fixture-library/hidden.txt")
-        );
-        writeBasicProject(repo, """
-                tasks.register<net.mezzdev.modshade.task.ModShadeJar>("modShadeJar") {
-                    fromJar()
-                }
-
-                modShade {
-                    failOnModJars.set(false)
-                    excludes.set(listOf("assets/fixture-library/**"))
-                }
-                """);
-
-        BuildResult result = gradle("modShadeJar").build();
-
-        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
-        Path jar = defaultShadedJar();
-        TestFixtures.assertJarContains(jar, DEFAULT_RELOCATED_LIBRARY_CLASS);
-        TestFixtures.assertJarContains(jar, "quilt.mod.json");
-        TestFixtures.assertJarContains(jar, "mcmod.info");
-        TestFixtures.assertJarDoesNotContain(jar, "assets/fixture-library/hidden.txt");
-    }
-
-    @Test
     void explicitRelocationDisablesInferredRelocationRules() throws IOException {
         Path repo = tempDir.resolve("repo");
         TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");

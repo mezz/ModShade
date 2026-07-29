@@ -50,9 +50,6 @@ public abstract class ModShadeReportTask extends DefaultTask {
     public abstract ListProperty<String> getExcludes();
 
     @Input
-    public abstract Property<Boolean> getFailOnModJars();
-
-    @Input
     public abstract ListProperty<String> getModShadeJarTasks();
 
     @OutputFile
@@ -85,7 +82,7 @@ public abstract class ModShadeReportTask extends DefaultTask {
 
         StringBuilder report = new StringBuilder();
         report.append("ModShade report\n");
-        appendConfiguration(report, getFailOnModJars().get(), getRelocationBase().get());
+        appendConfiguration(report, getRelocationBase().get());
         appendValues(report, "Output tasks", getModShadeJarTasks().get());
         appendValues(report, "Dependencies", dependencyFiles.stream().map(File::getName).toList());
         appendValues(report, "Detected mod jars", detectedModJars.stream().map(DetectedModJar::file).map(File::getName).toList());
@@ -96,9 +93,9 @@ public abstract class ModShadeReportTask extends DefaultTask {
         return report.toString();
     }
 
-    private static void appendConfiguration(StringBuilder report, boolean failOnModJars, String relocationBase) {
+    private static void appendConfiguration(StringBuilder report, String relocationBase) {
         report.append("Configuration:\n");
-        report.append(" - Fail on mod jars: ").append(failOnModJars).append('\n');
+        report.append(" - Mod jar shading: disallowed\n");
         report.append(" - Relocation base: ").append(relocationBase).append('\n');
     }
 

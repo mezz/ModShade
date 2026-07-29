@@ -48,4 +48,34 @@ class ModShadeDependencyValidationFunctionalTest extends ModShadeFunctionalTestS
         assertEquals(TaskOutcome.FAILED, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
         assertFalse(Files.exists(tempDir.resolve("build/libs/bad-mod-modshade.jar")));
     }
+
+    @Test
+    void failsWhenModMetadataWouldBeExcludedFromShadedDependencyContents() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(
+                repo,
+                "net.mezzdev.fixture",
+                "library",
+                "1.0",
+                List.of("quilt.mod.json", "assets/fixture-library/hidden.txt")
+        );
+        writeBasicProject(repo, """
+                tasks.register<net.mezzdev.modshade.task.ModShadeJar>("modShadeJar") {
+                    fromJar()
+                }
+
+                modShade {
+                    exclude("quilt.mod.json")
+                    exclude("assets/fixture-library/**")
+                }
+                """);
+
+        BuildResult result = gradle("modShadeJar").buildAndFail();
+
+        assertEquals(TaskOutcome.FAILED, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+        assertTrue(result.getOutput().contains("ModShade is for shading plain implementation-only libraries into Minecraft mods"));
+        assertTrue(result.getOutput().contains("library-1.0.jar"));
+        assertTrue(result.getOutput().contains("quilt.mod.json"));
+        assertFalse(Files.exists(defaultShadedJar()));
+    }
 }

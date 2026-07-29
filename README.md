@@ -221,18 +221,9 @@ Use the loader-supported packaging model for mods or loader-aware dependencies:
   [non-Minecraft dependencies](https://docs.neoforged.net/toolchain/docs/dependencies/nonmclibs/),
   or declare a mod dependency.
 
-Only opt out for unusual legacy artifacts with stale loader metadata that are
-intentionally being treated as plain libraries:
-
-```kotlin
-modShade {
-    failOnModJars.set(false)
-}
-```
-
-This opt-out does not make shading other mods a correct distribution strategy.
-When the guard is disabled, common mod-loader metadata files are still excluded
-from shaded dependency contents.
+There is no ModShade opt-out for shading mod jars. If an artifact has stale
+loader metadata but is actually intended to be a plain library, publish or
+depend on a classifier/variant that does not contain that metadata.
 
 ## Minimization
 
@@ -482,9 +473,7 @@ rules you declared.
 ## Excludes
 
 Default excludes remove Maven metadata and invalid signatures from shaded
-dependency contents. When `failOnModJars.set(false)`, ModShade also excludes
-common mod-loader metadata from dependency contents. Add project-specific
-excludes with `exclude(...)`:
+dependency contents. Add project-specific excludes with `exclude(...)`:
 
 ```kotlin
 modShade {
@@ -507,7 +496,6 @@ The default excludes are intentionally narrow:
 | `META-INF/*.SF` | JAR signature metadata is invalid after unpacking, relocating, and repacking classes. |
 | `META-INF/*.DSA` | Same as `.SF`: signature block data no longer matches the shaded jar. |
 | `META-INF/*.RSA` | Same as `.SF`: signature block data no longer matches the shaded jar. |
-| `fabric.mod.json`, `quilt.mod.json`, `META-INF/mods.toml`, `META-INF/neoforge.mods.toml`, `mcmod.info` | Loader metadata from a dependency must not make the final jar look like it contains another mod. These patterns are only defaults when `failOnModJars.set(false)`; with the default guard enabled, dependencies containing this metadata fail before shading. |
 
 To replace the defaults completely:
 

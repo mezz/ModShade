@@ -42,20 +42,11 @@ public abstract class ModShadeExtension {
             "META-INF/*.RSA"
     );
 
-    public static final List<String> MOD_METADATA_EXCLUDES = List.of(
-            "fabric.mod.json",
-            "quilt.mod.json",
-            "META-INF/mods.toml",
-            "META-INF/neoforge.mods.toml",
-            "mcmod.info"
-    );
-
     private final Project project;
     private final Configuration modShadeRuntimeElements;
     private final Configuration modShadeSourcesElements;
     private final Property<String> relocationBase;
     private final ListProperty<String> excludes;
-    private final Property<Boolean> failOnModJars;
     private final ListProperty<String> relocationRules;
     private final Set<String> modShadeJarTaskNames = new LinkedHashSet<>();
     private final Set<String> publishedRuntimeTaskNames = new LinkedHashSet<>();
@@ -74,10 +65,8 @@ public abstract class ModShadeExtension {
         this.modShadeSourcesElements = modShadeSourcesElements;
         this.relocationBase = project.getObjects().property(String.class);
         this.relocationBase.convention(project.provider(() -> defaultRelocationBase(project)));
-        this.failOnModJars = project.getObjects().property(Boolean.class);
-        this.failOnModJars.convention(true);
         this.excludes = project.getObjects().listProperty(String.class);
-        this.excludes.convention(project.provider(() -> defaultExcludes(failOnModJars.get())));
+        this.excludes.convention(DEFAULT_EXCLUDES);
         this.relocationRules = project.getObjects().listProperty(String.class);
         this.relocationRules.convention(List.of());
     }
@@ -88,10 +77,6 @@ public abstract class ModShadeExtension {
 
     public ListProperty<String> getExcludes() {
         return excludes;
-    }
-
-    public Property<Boolean> getFailOnModJars() {
-        return failOnModJars;
     }
 
     public List<RelocationRule> getRelocationRules() {
@@ -347,13 +332,4 @@ public abstract class ModShadeExtension {
         return sanitizedGroup + ".modshade";
     }
 
-    private static List<String> defaultExcludes(boolean failOnModJars) {
-        if (failOnModJars) {
-            return DEFAULT_EXCLUDES;
-        }
-
-        List<String> excludes = new ArrayList<>(DEFAULT_EXCLUDES);
-        excludes.addAll(MOD_METADATA_EXCLUDES);
-        return List.copyOf(excludes);
-    }
 }

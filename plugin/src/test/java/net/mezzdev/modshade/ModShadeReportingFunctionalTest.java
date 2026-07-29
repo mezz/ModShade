@@ -53,7 +53,7 @@ class ModShadeReportingFunctionalTest extends ModShadeFunctionalTestSupport {
         String reportText = Files.readString(report, StandardCharsets.UTF_8);
         assertTrue(reportText.contains("""
                 Configuration:
-                 - Fail on mod jars: true
+                 - Mod jar shading: disallowed
                  - Relocation base: com.example.libs
                 """));
         assertTrue(reportText.contains("modShadeJar"));

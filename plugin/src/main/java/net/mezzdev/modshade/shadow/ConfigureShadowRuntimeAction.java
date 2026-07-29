@@ -27,18 +27,15 @@ public final class ConfigureShadowRuntimeAction implements Action<Task>, Seriali
     private static final long serialVersionUID = 1L;
 
     private final FileCollection dependencyFiles;
-    private final Property<Boolean> failOnModJars;
     private final Property<String> relocationBase;
     private final Provider<List<String>> relocationRules;
 
     public ConfigureShadowRuntimeAction(
             FileCollection dependencyFiles,
-            Property<Boolean> failOnModJars,
             Property<String> relocationBase,
             Provider<List<String>> relocationRules
     ) {
         this.dependencyFiles = dependencyFiles;
-        this.failOnModJars = failOnModJars;
         this.relocationBase = relocationBase;
         this.relocationRules = relocationRules;
     }
@@ -55,7 +52,7 @@ public final class ConfigureShadowRuntimeAction implements Action<Task>, Seriali
 
     private void validatePlainLibraries() {
         List<DetectedModJar> detectedModJars = MinecraftModJarDetector.findModJars(dependencyFiles.getFiles());
-        if (!detectedModJars.isEmpty() && failOnModJars.get()) {
+        if (!detectedModJars.isEmpty()) {
             throw new GradleException(MinecraftModJarDetector.buildFailureMessage(detectedModJars));
         }
     }

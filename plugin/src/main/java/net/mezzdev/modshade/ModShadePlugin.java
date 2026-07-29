@@ -139,7 +139,6 @@ public final class ModShadePlugin implements Plugin<Project> {
             task.getInputs().property("modShade.relocationBase", extension.getRelocationBase());
             task.getInputs().property("modShade.relocationRules", extension.getFormattedRelocationRules());
             task.getDependencyExcludes().set(extension.getExcludes());
-            task.getInputs().property("modShade.failOnModJars", extension.getFailOnModJars());
             task.getInputs()
                     .files(modShadeDependencyFiles)
                     .withPropertyName("modShade.dependencyFiles")
@@ -147,7 +146,6 @@ public final class ModShadePlugin implements Plugin<Project> {
 
             task.doFirst(new ConfigureShadowRuntimeAction(
                     modShadeDependencyFiles,
-                    extension.getFailOnModJars(),
                     extension.getRelocationBase(),
                     extension.getFormattedRelocationRules()
             ));
@@ -195,7 +193,6 @@ public final class ModShadePlugin implements Plugin<Project> {
             task.getRelocationBase().set(extension.getRelocationBase());
             task.getExplicitRelocations().set(extension.getFormattedRelocationRules());
             task.getExcludes().set(extension.getExcludes());
-            task.getFailOnModJars().set(extension.getFailOnModJars());
             task.getModShadeJarTasks().set(project.provider(extension::getModShadeJarTaskNames));
             task.getReportFile().set(project.getLayout().getBuildDirectory().file("reports/modshade/modShadeReport.txt"));
         });
