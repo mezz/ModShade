@@ -44,6 +44,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "modshade-legacy-fabric-loom-115-integration"
 
-include("Library", "Verifier")
+include("Library", "Verifier", "NestedJarLibrary")
 project(":Library").projectDir = file("../Library")
 project(":Verifier").projectDir = file("../Verifier")
+project(":NestedJarLibrary").projectDir = file("../NestedJarLibrary")

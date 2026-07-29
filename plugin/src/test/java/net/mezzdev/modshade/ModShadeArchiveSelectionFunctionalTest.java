@@ -14,6 +14,7 @@ import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ModShadeArchiveSelectionFunctionalTest extends ModShadeFunctionalTestSupport {
@@ -133,6 +134,162 @@ class ModShadeArchiveSelectionFunctionalTest extends ModShadeFunctionalTestSuppo
         TestFixtures.assertJarContains(unshadedReobfJar, "reobf-only.txt");
         TestFixtures.assertJarContains(unshadedReobfJar, MOD_CLASS);
         TestFixtures.assertJarDoesNotContain(unshadedReobfJar, DEFAULT_RELOCATED_LIBRARY_CLASS);
+    }
+
+    @Test
+    void shadeJarDetectsConfiguredJarJarArchiveTask() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");
+        TestFixtures.createJar(tempDir.resolve("libs/nested-mod.jar"), List.of("nested-mod-marker.txt"));
+        writeBasicProject(repo, """
+                configurations.create("jarJar") {
+                    isCanBeResolved = true
+                    isCanBeConsumed = false
+                }
+
+                dependencies {
+                    add("jarJar", files("libs/nested-mod.jar"))
+                }
+
+                val jarJarMarker = layout.buildDirectory.file("jarjar-marker/jarjar-only.txt")
+
+                val writeJarJarMarker by tasks.registering {
+                    outputs.file(jarJarMarker)
+                    doLast {
+                        val markerFile = jarJarMarker.get().asFile
+                        markerFile.parentFile.mkdirs()
+                        markerFile.writeText("jarjar")
+                    }
+                }
+
+                val jarJar by tasks.registering(Jar::class) {
+                    dependsOn(tasks.jar, writeJarJarMarker)
+                    from(zipTree(tasks.jar.flatMap { it.archiveFile })) {
+                        exclude("META-INF/MANIFEST.MF")
+                    }
+                    from(jarJarMarker)
+                }
+
+                modShade {
+                    shadeJar()
+                }
+                """);
+
+        BuildResult result = gradle("modShadeJar").build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":jar")).getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":jarJar")).getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+
+        Path jar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarContains(jar, "jarjar-only.txt");
+        TestFixtures.assertJarContains(jar, DEFAULT_RELOCATED_LIBRARY_CLASS);
+        TestFixtures.assertClassReferences(jar, MOD_CLASS, DEFAULT_RELOCATED_LIBRARY_INTERNAL_NAME);
+
+        Path unshadedJarJar = tempDir.resolve("build/libs/simple-mod-1.0-unshaded.jar");
+        TestFixtures.assertJarContains(unshadedJarJar, "jarjar-only.txt");
+        TestFixtures.assertJarContains(unshadedJarJar, MOD_CLASS);
+        TestFixtures.assertJarDoesNotContain(unshadedJarJar, DEFAULT_RELOCATED_LIBRARY_CLASS);
+    }
+
+    @Test
+    void shadeJarDependsOnMatchingReobfTaskForConfiguredJarJarArchiveTask() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");
+        TestFixtures.createJar(tempDir.resolve("libs/nested-mod.jar"), List.of("nested-mod-marker.txt"));
+        writeBasicProject(repo, """
+                configurations.create("jarJar") {
+                    isCanBeResolved = true
+                    isCanBeConsumed = false
+                }
+
+                dependencies {
+                    add("jarJar", files("libs/nested-mod.jar"))
+                }
+
+                val jarJar by tasks.registering(Jar::class) {
+                    dependsOn(tasks.jar)
+                    from(zipTree(tasks.jar.flatMap { it.archiveFile })) {
+                        exclude("META-INF/MANIFEST.MF")
+                    }
+                }
+
+                val reobfMarker = layout.buildDirectory.file("reobf-marker/reobf-jarjar.txt")
+
+                tasks.register("reobfJarJar") {
+                    dependsOn(jarJar)
+                    outputs.file(reobfMarker)
+                    doLast {
+                        val markerFile = reobfMarker.get().asFile
+                        markerFile.parentFile.mkdirs()
+                        markerFile.writeText("reobf jarjar")
+                    }
+                }
+
+                modShade {
+                    shadeJar()
+                }
+
+                tasks.named("modShadeJar") {
+                    doFirst {
+                        check(reobfMarker.get().asFile.isFile)
+                    }
+                }
+                """);
+
+        BuildResult result = gradle("modShadeJar").build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":jarJar")).getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":reobfJarJar")).getOutcome());
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+        Path jar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarContains(jar, DEFAULT_RELOCATED_LIBRARY_CLASS);
+    }
+
+    @Test
+    void shadeJarIgnoresEmptyJarJarConfiguration() throws IOException {
+        Path repo = tempDir.resolve("repo");
+        TestFixtures.publishLibrary(repo, "net.mezzdev.fixture", "library", "1.0");
+        writeBasicProject(repo, """
+                configurations.create("jarJar") {
+                    isCanBeResolved = true
+                    isCanBeConsumed = false
+                }
+
+                val jarJarMarker = layout.buildDirectory.file("jarjar-marker/jarjar-only.txt")
+
+                val writeJarJarMarker by tasks.registering {
+                    outputs.file(jarJarMarker)
+                    doLast {
+                        val markerFile = jarJarMarker.get().asFile
+                        markerFile.parentFile.mkdirs()
+                        markerFile.writeText("jarjar")
+                    }
+                }
+
+                val jarJar by tasks.registering(Jar::class) {
+                    dependsOn(tasks.jar, writeJarJarMarker)
+                    from(zipTree(tasks.jar.flatMap { it.archiveFile })) {
+                        exclude("META-INF/MANIFEST.MF")
+                    }
+                    from(jarJarMarker)
+                }
+
+                modShade {
+                    shadeJar()
+                }
+                """);
+
+        BuildResult result = gradle("modShadeJar").build();
+
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":jar")).getOutcome());
+        assertNull(result.task(":jarJar"));
+        assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":modShadeJar")).getOutcome());
+
+        Path jar = tempDir.resolve("build/libs/simple-mod-1.0.jar");
+        TestFixtures.assertJarDoesNotContain(jar, "jarjar-only.txt");
+        TestFixtures.assertJarContains(jar, DEFAULT_RELOCATED_LIBRARY_CLASS);
+        TestFixtures.assertClassReferences(jar, MOD_CLASS, DEFAULT_RELOCATED_LIBRARY_INTERNAL_NAME);
     }
 
     @Test

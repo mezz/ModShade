@@ -30,6 +30,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "modshade-fabric-loom-non-remap-integration"
 
-include("Library", "Verifier")
+include("Library", "Verifier", "NestedJarLibrary")
 project(":Library").projectDir = file("../Library")
 project(":Verifier").projectDir = file("../Verifier")
+project(":NestedJarLibrary").projectDir = file("../NestedJarLibrary")

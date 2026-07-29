@@ -278,19 +278,19 @@ setup unless the row says to use explicit archive tasks.
 
 | Tool / version | Minecraft versions | Final archives | Status |
 | --- | --- | --- | --- |
-| ModDevGradle 2.x | Minecraft 1.21 through 26.2 | `jar`, `sourcesJar` | Supported — [test/ModDevGradle2](test/ModDevGradle2/build.gradle.kts) verifies Minecraft 26.2 and ModDevGradle 2.0.142. |
-| ModDevGradle 1.x | Minecraft 1.21 through 1.21.11 | `jar`, `sourcesJar` | Supported — [test/ModDevGradle1](test/ModDevGradle1/build.gradle.kts) verifies Minecraft 1.21.1 and ModDevGradle 1.0.24. |
-| NeoGradle 7.x | Minecraft 1.20.2 through 26.2 | `jar`, `sourcesJar` | Supported — [test/NeoGradle7](test/NeoGradle7/build.gradle.kts) verifies Minecraft 1.21.1 and NeoGradle 7.1.38. |
+| ModDevGradle 2.x | Minecraft 1.21 through 26.2 | `jar` with configured `jarJar` inputs, `sourcesJar` | Supported — [test/ModDevGradle2](test/ModDevGradle2/build.gradle.kts) verifies Minecraft 26.2 and ModDevGradle 2.0.142. |
+| ModDevGradle 1.x | Minecraft 1.21 through 1.21.11 | `jar` with configured `jarJar` inputs, `sourcesJar` | Supported — [test/ModDevGradle1](test/ModDevGradle1/build.gradle.kts) verifies Minecraft 1.21.1 and ModDevGradle 1.0.24. |
+| NeoGradle 7.x | Minecraft 1.20.2 through 26.2 | `jar`, configured `jarJar`, `sourcesJar` | Supported — [test/NeoGradle7](test/NeoGradle7/build.gradle.kts) verifies Minecraft 1.21.1 and NeoGradle 7.1.38. |
 | Custom archive tasks | Project-defined | Project-defined | Use [explicit archive tasks](#explicit-archive-tasks). |
 
 ### Fabric
 
 | Tool / version | Minecraft versions | Final archives | Status |
 | --- | --- | --- | --- |
-| Fabric Loom 1.17.x, `net.fabricmc.fabric-loom` | Minecraft 26.1 through 26.2 | `jar`, `sourcesJar` | Supported — [test/FabricLoom117NonRemap](test/FabricLoom117NonRemap/build.gradle.kts) verifies Minecraft 26.2 and Loom 1.17.12. |
-| Fabric Loom 1.17.x, `net.fabricmc.fabric-loom-remap` | Minecraft releases 1.14 through 1.21.11; snapshots from 18w43b until before 26.1 | `remapJar`, `remapSourcesJar` | Supported — [test/FabricLoom117Remap](test/FabricLoom117Remap/build.gradle.kts) verifies Minecraft 1.20.1 and Loom 1.17.12. |
+| Fabric Loom 1.17.x, `net.fabricmc.fabric-loom` | Minecraft 26.1 through 26.2 | `jar` with configured `include` nested jars, `sourcesJar` | Supported — [test/FabricLoom117NonRemap](test/FabricLoom117NonRemap/build.gradle.kts) verifies Minecraft 26.2 and Loom 1.17.12. |
+| Fabric Loom 1.17.x, `net.fabricmc.fabric-loom-remap` | Minecraft releases 1.14 through 1.21.11; snapshots from 18w43b until before 26.1 | `remapJar` with configured `include` nested jars, `remapSourcesJar` | Supported — [test/FabricLoom117Remap](test/FabricLoom117Remap/build.gradle.kts) verifies Minecraft 1.20.1 and Loom 1.17.12. |
 | Fabric Loom 1.17.x intermediary API/common archives | Minecraft releases 1.14 through 1.21.11; snapshots from 18w43b until before 26.1 | Project-defined | Not recommended for API-only jars. Use [explicit archive tasks](#explicit-archive-tasks) only if the jar intentionally contains implementation classes. Covered by [test/FabricLoom117Remap](test/FabricLoom117Remap/build.gradle.kts). |
-| Fabric Loom 1.15.3 + Legacy Looming 1.15.3 | Minecraft 1.3 through 1.13.2, plus 1.14 snapshots | `remapJar`, `remapSourcesJar` | Supported — [test/LegacyFabricLoom115](test/LegacyFabricLoom115/build.gradle.kts) verifies Minecraft 1.13.2. |
+| Fabric Loom 1.15.3 + Legacy Looming 1.15.3 | Minecraft 1.3 through 1.13.2, plus 1.14 snapshots | `remapJar` with configured `include` nested jars, `remapSourcesJar` | Supported — [test/LegacyFabricLoom115](test/LegacyFabricLoom115/build.gradle.kts) verifies Minecraft 1.13.2. |
 | Custom archive tasks | Project-defined | Project-defined | Use [explicit archive tasks](#explicit-archive-tasks). |
 
 Fabric support starts at Minecraft release 1.14 and snapshot 18w43b. Older
@@ -302,8 +302,8 @@ earlier Fabric and Legacy Fabric builds publish `remapJar`.
 
 | Tool / version | Minecraft versions | Final archives | Status |
 | --- | --- | --- | --- |
-| ForgeGradle 6.x | Minecraft 1.20.2 through 26.2 | `jar` after `reobfJar`, `sourcesJar` | Supported — [test/ForgeGradle6](test/ForgeGradle6/build.gradle.kts) verifies Minecraft 1.20.2 and ForgeGradle 6.0.54. |
-| ModDevGradle legacyforge 2.x | Minecraft 1.17 through 1.20.1 | archive-valued `reobfJar`, `sourcesJar` | Supported — [test/ModDevGradle2LegacyForge](test/ModDevGradle2LegacyForge/build.gradle.kts) verifies Minecraft 1.20.1 and ModDevGradle 2.0.142. |
+| ForgeGradle 6.x | Minecraft 1.20.2 through 26.2 | configured `jarJar` after `reobfJarJar`, otherwise `jar` after `reobfJar`, `sourcesJar` | Supported — [test/ForgeGradle6](test/ForgeGradle6/build.gradle.kts) verifies Minecraft 1.20.2 and ForgeGradle 6.0.54. |
+| ModDevGradle legacyforge 2.x | Minecraft 1.17 through 1.20.1 | archive-valued `reobfJar` with configured `jarJar` inputs, `sourcesJar` | Supported — [test/ModDevGradle2LegacyForge](test/ModDevGradle2LegacyForge/build.gradle.kts) verifies Minecraft 1.20.1 and ModDevGradle 2.0.142. |
 | ForgeGradle 3 through 5 | Minecraft 1.13 through 1.20.1 | `jar` after `reobfJar`, `sourcesJar` | Unsupported on Gradle versions older than 8.3. Unknown on Gradle 8.3 or newer. |
 | RetroFuturaGradle 1.x | Minecraft 1.12.2 | archive-valued `reobfJar`, `sourcesJar` | Supported — [test/RetroFuturaGradle1](test/RetroFuturaGradle1/build.gradle.kts) verifies RFG 1.4.9. |
 | ForgeGradle 2.3 on Gradle 4.x | Minecraft 1.12.2 | `jar` after `reobfJar`, `sourceJar` | Unsupported because ModShade requires Gradle 8.3 or newer. |
@@ -330,8 +330,28 @@ archive your loader build already produced.
 
 1. `remapJar`
 2. archive-valued `reobfJar`
-3. `jar` after a non-archive `reobfJar`
-4. `jar`
+3. `jarJar`, when a `jarJar` configuration has declared dependencies
+4. `jar` after a non-archive `reobfJar`
+5. `jar`
+
+This lets NeoGradle and ForgeGradle builds combine ModShade relocation with
+archive-valued jar-in-jar packaging: `jar` builds the plain mod, `jarJar` adds
+nested mod jars, and `modShadeJar` relocates plain ModShade dependencies into
+that jarJar output. For ForgeGradle, ModShade also waits for a matching
+`reobfJarJar` task when ForgeGradle registers one. When this path is used,
+ModShade moves the intermediate plain `jar` to a `plain-unshaded` classifier if
+it would otherwise collide with the final shaded jar or the unshaded jarJar
+archive.
+
+ModDevGradle's `jarJar` task is not a final archive task. It generates
+jar-in-jar metadata and nested jar inputs that ModDevGradle adds to `jar` (or to
+the archive-valued `reobfJar` for legacy Forge). ModShade therefore shades the
+ModDevGradle final archive after those inputs are present.
+
+Fabric Loom's equivalent is the `include` configuration. Loom nests those jars
+into `jar` or `remapJar`; ModShade shades that final archive after Loom's
+nesting step. If `jarJar` exists but has no declared dependencies, ModShade
+ignores it and uses the next available final archive.
 
 `shadeSourcesJar()` chooses `remapSourcesJar`, then `sourcesJar`. For local
 project dependencies declared with a ModShade dependency configuration, it also
@@ -353,9 +373,12 @@ publishMods {
 }
 ```
 
-For Maven publishing, prefer ModShade's software component. This publishes the
-shaded runtime and sources jars and gives Gradle module metadata useful variants
-for Gradle consumers:
+For Maven publishing, publish the normal Java component. When `shadeJar()` is
+used, ModShade replaces the Java component's normal runtime variant with the
+shaded runtime variant. When `shadeSourcesJar()` is used, it similarly replaces
+the normal sources variant with relocated shaded sources. This keeps other
+variants or artifacts added to the Java component by loader plugins available
+for publication:
 
 ```kotlin
 import org.gradle.api.publish.maven.MavenPublication
@@ -366,7 +389,7 @@ modShade.shadeSourcesJar()
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
-            from(components["modShade"])
+            from(components["java"])
             artifact(tasks.named("apiJar")) // Optional API jar; do not shade it.
         }
     }
@@ -376,9 +399,21 @@ publishing {
 ModShade dependencies are already inside the shaded jars. Do not also publish
 them as external Maven dependencies.
 
-`from(components["modShade"])` only adds the shaded runtime and shaded sources
-jars that ModShade creates. Add any other publication artifacts, such as API
-jars, with your publishing plugin as usual.
+`from(components["java"])` publishes the shaded runtime jar as the runtime
+variant while preserving the Java component for Gradle metadata and for other
+plugins that add their own publication variants.
+
+The older `from(components["modShade"])` component is still available for
+compatibility, but it only contains ModShade's own shaded runtime and sources
+variants. Prefer `components["java"]` so loader-plugin publication additions are
+not dropped.
+
+The integration builds publish to local test repositories and verify both the
+published jars and Gradle/Maven metadata. The checks assert that the shaded
+runtime and relocated sources are the published artifacts, normal
+`runtimeElements`/`sourcesElements` are skipped, and ModShade or nested-jar
+implementation dependencies are not leaked as Maven/Gradle metadata
+dependencies.
 
 `shadeJar()` changes the source runtime archive classifier to `unshaded`.
 `shadeSourcesJar()` changes the source sources archive classifier to

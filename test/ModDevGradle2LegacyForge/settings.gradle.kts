@@ -34,6 +34,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "modshade-moddevgradle-legacyforge-integration"
 
-include("Library", "Verifier")
+include("Library", "Verifier", "NestedJarLibrary")
 project(":Library").projectDir = file("../Library")
 project(":Verifier").projectDir = file("../Verifier")
+project(":NestedJarLibrary").projectDir = file("../NestedJarLibrary")

@@ -1,5 +1,6 @@
 import net.fabricmc.loom.task.RemapJarTask
 import net.fabricmc.loom.task.RemapSourcesJarTask
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
@@ -7,6 +8,7 @@ import org.gradle.api.tasks.bundling.Jar
 
 plugins {
     java
+    `maven-publish`
     id("net.fabricmc.fabric-loom-remap") version "1.17.12"
     id("net.mezzdev.modshade")
 }
@@ -19,6 +21,10 @@ group = "com.example.modshade.fabric"
 version = "1.0.0"
 
 project(":Library") {
+    group = "net.mezzdev.modshade.integration"
+    version = rootProject.version
+}
+project(":NestedJarLibrary") {
     group = "net.mezzdev.modshade.integration"
     version = rootProject.version
 }
@@ -71,6 +77,7 @@ dependencies {
     implementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
 
     modShadeImplementation(project(":Library"))
+    add("include", project(":NestedJarLibrary"))
 }
 
 loom {
@@ -141,6 +148,22 @@ tasks.assemble {
     dependsOn(apiJar)
 }
 
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            artifactId = base.archivesName.get()
+            from(components["java"])
+            artifact(apiJar)
+        }
+    }
+    repositories {
+        maven {
+            name = "integration"
+            url = layout.buildDirectory.dir("published").get().asFile.toURI()
+        }
+    }
+}
+
 val verifierSourceSets = project(":Verifier").extensions.getByType<SourceSetContainer>()
 val verifierRuntimeClasspath = verifierSourceSets.named(SourceSet.MAIN_SOURCE_SET_NAME).map { it.runtimeClasspath }
 
@@ -149,6 +172,7 @@ tasks.register<JavaExec>("verifyIntegration") {
     description = "Builds and verifies the Fabric Loom 1.17 remap integration artifacts."
     dependsOn(
         "assemble",
+        "publishMavenJavaPublicationToIntegrationRepository",
         project(":Verifier").tasks.named("classes"),
         "verifyIntermediaryApiIntegration",
     )
@@ -161,6 +185,11 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-fabric-loom-remap-1.0.0-api.jar"),
+        "--published-runtime-jar", publishedArtifact("modshade-integration-fabric-loom-remap-1.0.0.jar"),
+        "--published-sources-jar", publishedArtifact("modshade-integration-fabric-loom-remap-1.0.0-sources.jar"),
+        "--published-api-jar", publishedArtifact("modshade-integration-fabric-loom-remap-1.0.0-api.jar"),
+        "--published-pom", publishedArtifact("modshade-integration-fabric-loom-remap-1.0.0.pom"),
+        "--published-module", publishedArtifact("modshade-integration-fabric-loom-remap-1.0.0.module"),
         "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "fabric.mod.json",
         "--mod-class", "com/example/modshade/integration/fabric/FabricIntegrationMod.class",
@@ -169,6 +198,7 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--relocated-library-class", "com/example/modshade/fabric/modshade/net/mezzdev/modshade/fixture/FixtureLibrary.class",
         "--relocated-library-internal-name", "com/example/modshade/fabric/modshade/net/mezzdev/modshade/fixture/FixtureLibrary",
         "--relocated-package", "com.example.modshade.fabric.modshade.net.mezzdev.modshade.fixture",
+        "--required-runtime-entry-prefix-and-suffix", "META-INF/jars/::nested-jar-library-1.0.0.jar",
         "--required-runtime-reference", "net/minecraft/class_1802",
         "--required-runtime-reference", "method_7876",
         "--forbidden-runtime-reference", "net/minecraft/item/Items",
@@ -177,6 +207,16 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--required-source-text", "method_7876()",
         "--forbidden-source-text", "net.minecraft.item.Items",
         "--forbidden-source-text", "getTranslationKey()",
+        "--required-module-variant", "modShadeRuntimeElements",
+        "--required-module-variant", "modShadeSourcesElements",
+        "--forbidden-module-variant", "runtimeElements",
+        "--forbidden-module-variant", "sourcesElements",
+        "--required-module-artifact-file", "modshade-integration-fabric-loom-remap-1.0.0.jar",
+        "--required-module-artifact-file", "modshade-integration-fabric-loom-remap-1.0.0-sources.jar",
+        "--forbidden-pom-text", "modshade-integration-library",
+        "--forbidden-module-text", "modshade-integration-library",
+        "--forbidden-pom-text", "nested-jar-library",
+        "--forbidden-module-text", "nested-jar-library",
     )
 }
 
@@ -213,3 +253,9 @@ tasks.register<JavaExec>("verifyIntermediaryApiIntegration") {
 
 fun artifact(fileName: String): String =
     layout.buildDirectory.file("libs/$fileName").get().asFile.absolutePath
+
+fun publishedArtifact(fileName: String): String =
+    layout.buildDirectory.file("published/${group.toString().replace('.', '/')}/${base.archivesName.get()}/$version/$fileName")
+        .get()
+        .asFile
+        .absolutePath

@@ -1,0 +1,8 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "modshade_nested_jar_library"
+version = "1.0.0"
+displayName = "ModShade Nested Jar Library"

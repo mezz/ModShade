@@ -24,6 +24,7 @@ import org.gradle.util.GradleVersion;
 
 import net.mezzdev.modshade.relocation.RelocateSourceFilesAction;
 import net.mezzdev.modshade.shadow.ConfigureShadowRuntimeAction;
+import net.mezzdev.modshade.shadow.PreserveNestedJarEntriesAction;
 import net.mezzdev.modshade.shadow.RemoveDependencyExcludedEntriesAction;
 import net.mezzdev.modshade.task.ModShadeJar;
 import net.mezzdev.modshade.task.ModShadeReportTask;
@@ -34,6 +35,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.inject.Inject;
 
@@ -50,6 +52,7 @@ public final class ModShadePlugin implements Plugin<Project> {
     private static final String RUNTIME_ELEMENTS_CONFIGURATION_NAME = "modShadeRuntimeElements";
     private static final String SOURCES_ELEMENTS_CONFIGURATION_NAME = "modShadeSourcesElements";
     private static final String COMPONENT_NAME = "modShade";
+    private static final Set<String> JAVA_RUNTIME_DEPENDENCY_CONFIGURATION_NAMES = Set.of("api", "implementation", "runtimeOnly");
     private static final GradleVersion MINIMUM_GRADLE_VERSION = GradleVersion.version("8.3");
 
     private final SoftwareComponentFactory softwareComponentFactory;
@@ -96,6 +99,7 @@ public final class ModShadePlugin implements Plugin<Project> {
             project.getConfigurations().named("testRuntimeClasspath").configure(testRuntimeClasspath ->
                     testRuntimeClasspath.extendsFrom(modShadeImplementationConfiguration, modShadeRuntimeOnlyConfiguration)
             );
+            configurePublishedRuntimeDependencies(project, modShadeRuntimeElements);
         });
         project.getConfigurations()
                 .matching(configuration -> ADDITIONAL_RUNTIME_CLASSPATH_CONFIGURATION_NAME.equals(configuration.getName()))
@@ -153,6 +157,7 @@ public final class ModShadePlugin implements Plugin<Project> {
                     extension.getRelocationBase(),
                     extension.getFormattedRelocationRules()
             ));
+            task.doLast(new PreserveNestedJarEntriesAction(task.getSourceArchiveFile()));
         });
     }
 
@@ -284,6 +289,12 @@ public final class ModShadePlugin implements Plugin<Project> {
                     objects.named(Bundling.class, Bundling.SHADOWED)
             );
         });
+    }
+
+    private static void configurePublishedRuntimeDependencies(Project project, Configuration modShadeRuntimeElements) {
+        project.getConfigurations()
+                .matching(configuration -> JAVA_RUNTIME_DEPENDENCY_CONFIGURATION_NAMES.contains(configuration.getName()))
+                .configureEach(modShadeRuntimeElements::extendsFrom);
     }
 
     private static Configuration createModShadeSourcesElementsConfiguration(Project project) {

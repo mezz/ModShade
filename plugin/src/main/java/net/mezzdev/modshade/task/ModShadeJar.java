@@ -30,6 +30,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.jar.JarFile;
 
@@ -39,6 +40,13 @@ import java.util.jar.JarFile;
 @CacheableTask
 @SuppressWarnings("unused")
 public abstract class ModShadeJar extends ShadowJar {
+    public static final List<String> NESTED_JAR_ENTRY_PATTERNS = List.of(
+            "META-INF/jarjar/**/*.jar",
+            "META-INF/jarjar/*.jar",
+            "META-INF/jars/**/*.jar",
+            "META-INF/jars/*.jar"
+    );
+
     private final RegularFileProperty sourceArchiveFile;
     private boolean sourceArchiveConfigured;
 
@@ -60,7 +68,10 @@ public abstract class ModShadeJar extends ShadowJar {
         ArchiveCoordinates.copyFrom(sourceArchiveTask, this);
         dependsOn(sourceArchiveTask);
         sourceArchiveFile.set(sourceArchiveTask.flatMap(AbstractArchiveTask::getArchiveFile));
-        from(getProject().zipTree(sourceArchiveFile), copySpec -> copySpec.exclude("META-INF/MANIFEST.MF", "MANIFEST.MF"));
+        from(getProject().zipTree(sourceArchiveFile), copySpec ->
+                copySpec.exclude("META-INF/MANIFEST.MF", "MANIFEST.MF")
+                        .exclude(NESTED_JAR_ENTRY_PATTERNS)
+        );
         doFirst(new MergeSourceManifestAction(sourceArchiveFile));
     }
 

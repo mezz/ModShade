@@ -39,6 +39,7 @@ public final class VerifyModShadeArtifacts {
         List<String> developmentRuntimeClasspathEntryPrefixes = arguments.all("development-runtime-classpath-entry-prefix");
         verifyDevelopmentRuntimeClasspath(developmentRuntimeClasspathEntryPrefixes);
         if (!arguments.has("runtime-jar") && !arguments.has("sources-jar") && !arguments.has("api-jar")) {
+            verifyPublishedMetadata(arguments);
             return;
         }
 
@@ -55,6 +56,9 @@ public final class VerifyModShadeArtifacts {
         String relocatedPackage = arguments.required("relocated-package");
         List<String> requiredRuntimeReferences = arguments.all("required-runtime-reference");
         List<String> forbiddenRuntimeReferences = arguments.all("forbidden-runtime-reference");
+        List<String> requiredRuntimeEntries = arguments.all("required-runtime-entry");
+        List<String> requiredRuntimeEntryPrefixAndSuffixes = arguments.all("required-runtime-entry-prefix-and-suffix");
+        List<String> forbiddenRuntimeEntries = arguments.all("forbidden-runtime-entry");
         List<String> requiredSourceTexts = arguments.all("required-source-text");
         List<String> forbiddenSourceTexts = arguments.all("forbidden-source-text");
 
@@ -65,10 +69,31 @@ public final class VerifyModShadeArtifacts {
                 relocatedLibraryClass,
                 relocatedLibraryInternalName,
                 requiredRuntimeReferences,
-                forbiddenRuntimeReferences
+                forbiddenRuntimeReferences,
+                requiredRuntimeEntries,
+                requiredRuntimeEntryPrefixAndSuffixes,
+                forbiddenRuntimeEntries
         );
         verifySourcesJar(sourcesJar, modSource, relocatedPackage, requiredSourceTexts, forbiddenSourceTexts);
         verifyApiJar(apiJar, apiClass, relocatedLibraryClass);
+        verifyPublishedArtifacts(
+                arguments,
+                loaderMetadata,
+                modClass,
+                modSource,
+                apiClass,
+                relocatedLibraryClass,
+                relocatedLibraryInternalName,
+                relocatedPackage,
+                requiredRuntimeReferences,
+                forbiddenRuntimeReferences,
+                requiredRuntimeEntries,
+                requiredRuntimeEntryPrefixAndSuffixes,
+                forbiddenRuntimeEntries,
+                requiredSourceTexts,
+                forbiddenSourceTexts
+        );
+        verifyPublishedMetadata(arguments);
     }
 
     private static void verifyDevelopmentRuntimeClasspath(List<String> requiredEntryPrefixes) {
@@ -105,19 +130,118 @@ public final class VerifyModShadeArtifacts {
             String relocatedLibraryClass,
             String relocatedLibraryInternalName,
             List<String> requiredRuntimeReferences,
-            List<String> forbiddenRuntimeReferences
+            List<String> forbiddenRuntimeReferences,
+            List<String> requiredRuntimeEntries,
+            List<String> requiredRuntimeEntryPrefixAndSuffixes,
+            List<String> forbiddenRuntimeEntries
     ) throws IOException {
         if (loaderMetadata != null) {
             assertJarContains(jar, loaderMetadata);
         }
         assertJarContains(jar, modClass);
         assertJarContains(jar, relocatedLibraryClass);
+        for (String requiredRuntimeEntry : requiredRuntimeEntries) {
+            assertJarContains(jar, requiredRuntimeEntry);
+        }
+        for (String requiredRuntimeEntryPrefixAndSuffix : requiredRuntimeEntryPrefixAndSuffixes) {
+            EntryPrefixAndSuffix entryPrefixAndSuffix = EntryPrefixAndSuffix.parse(requiredRuntimeEntryPrefixAndSuffix);
+            assertJarContainsEntryWithPrefixAndSuffix(jar, entryPrefixAndSuffix.prefix(), entryPrefixAndSuffix.suffix());
+        }
         assertJarDoesNotContain(jar, "net/mezzdev/modshade/fixture/FixtureLibrary.class");
         assertJarDoesNotContain(jar, "META-INF/maven/net.mezzdev.modshade.integration/modshade-integration-library/pom.properties");
         assertJarDoesNotContain(jar, "META-INF/TEST.SF");
+        for (String forbiddenRuntimeEntry : forbiddenRuntimeEntries) {
+            assertJarDoesNotContain(jar, forbiddenRuntimeEntry);
+        }
         assertClassContainsReferences(jar, modClass, List.of(relocatedLibraryInternalName));
         assertClassContainsReferences(jar, modClass, requiredRuntimeReferences);
         assertClassDoesNotContainReferences(jar, modClass, forbiddenRuntimeReferences);
+    }
+
+    private static void verifyPublishedArtifacts(
+            Arguments arguments,
+            String loaderMetadata,
+            String modClass,
+            String modSource,
+            String apiClass,
+            String relocatedLibraryClass,
+            String relocatedLibraryInternalName,
+            String relocatedPackage,
+            List<String> requiredRuntimeReferences,
+            List<String> forbiddenRuntimeReferences,
+            List<String> requiredRuntimeEntries,
+            List<String> requiredRuntimeEntryPrefixAndSuffixes,
+            List<String> forbiddenRuntimeEntries,
+            List<String> requiredSourceTexts,
+            List<String> forbiddenSourceTexts
+    ) throws IOException {
+        String publishedRuntimeJarPath = arguments.optional("published-runtime-jar");
+        if (publishedRuntimeJarPath != null) {
+            verifyRuntimeJar(
+                    requireFile(new File(publishedRuntimeJarPath)),
+                    loaderMetadata,
+                    modClass,
+                    relocatedLibraryClass,
+                    relocatedLibraryInternalName,
+                    requiredRuntimeReferences,
+                    forbiddenRuntimeReferences,
+                    requiredRuntimeEntries,
+                    requiredRuntimeEntryPrefixAndSuffixes,
+                    forbiddenRuntimeEntries
+            );
+        }
+
+        String publishedSourcesJarPath = arguments.optional("published-sources-jar");
+        if (publishedSourcesJarPath != null) {
+            verifySourcesJar(
+                    requireFile(new File(publishedSourcesJarPath)),
+                    modSource,
+                    relocatedPackage,
+                    requiredSourceTexts,
+                    forbiddenSourceTexts
+            );
+        }
+
+        String publishedApiJarPath = arguments.optional("published-api-jar");
+        if (publishedApiJarPath != null) {
+            verifyApiJar(requireFile(new File(publishedApiJarPath)), apiClass, relocatedLibraryClass);
+        }
+    }
+
+    private static void verifyPublishedMetadata(Arguments arguments) throws IOException {
+        String publishedPomPath = arguments.optional("published-pom");
+        if (publishedPomPath != null) {
+            String pomText = readRequiredTextFile(publishedPomPath);
+            for (String requiredText : arguments.all("required-pom-text")) {
+                assertTextContains(publishedPomPath, pomText, requiredText);
+            }
+            for (String forbiddenText : arguments.all("forbidden-pom-text")) {
+                assertTextDoesNotContain(publishedPomPath, pomText, forbiddenText);
+            }
+        }
+
+        String publishedModulePath = arguments.optional("published-module");
+        if (publishedModulePath != null) {
+            String moduleText = readRequiredTextFile(publishedModulePath);
+            for (String requiredText : arguments.all("required-module-text")) {
+                assertTextContains(publishedModulePath, moduleText, requiredText);
+            }
+            for (String forbiddenText : arguments.all("forbidden-module-text")) {
+                assertTextDoesNotContain(publishedModulePath, moduleText, forbiddenText);
+            }
+            for (String requiredVariant : arguments.all("required-module-variant")) {
+                assertTextContains(publishedModulePath, moduleText, "\"name\": \"" + requiredVariant + "\"");
+            }
+            for (String forbiddenVariant : arguments.all("forbidden-module-variant")) {
+                assertTextDoesNotContain(publishedModulePath, moduleText, "\"name\": \"" + forbiddenVariant + "\"");
+            }
+            for (String requiredArtifactFile : arguments.all("required-module-artifact-file")) {
+                assertTextContains(publishedModulePath, moduleText, "\"name\": \"" + requiredArtifactFile + "\"");
+            }
+            for (String forbiddenArtifactFile : arguments.all("forbidden-module-artifact-file")) {
+                assertTextDoesNotContain(publishedModulePath, moduleText, "\"name\": \"" + forbiddenArtifactFile + "\"");
+            }
+        }
     }
 
     private static void verifySourcesJar(
@@ -172,6 +296,24 @@ public final class VerifyModShadeArtifacts {
         }
     }
 
+    private static void assertJarContainsEntryWithPrefixAndSuffix(File jar, String prefix, String suffix) throws IOException {
+        try (ZipFile zip = new ZipFile(jar)) {
+            boolean matched = zip.stream()
+                    .map(ZipEntry::getName)
+                    .anyMatch(entryName -> entryName.startsWith(prefix) && entryName.endsWith(suffix));
+            if (!matched) {
+                throw new IllegalStateException(
+                        "Expected "
+                                + jar
+                                + " to contain an entry starting with "
+                                + prefix
+                                + " and ending with "
+                                + suffix
+                );
+            }
+        }
+    }
+
     private static void assertJarEntryContains(File jar, String entryName, String expectedText) throws IOException {
         String text = jarEntryText(jar, entryName);
         if (!text.contains(expectedText)) {
@@ -193,6 +335,23 @@ public final class VerifyModShadeArtifacts {
                 throw new IllegalStateException("Expected " + jar + " to contain " + entryName);
             }
             return new String(zip.getInputStream(entry).readAllBytes(), StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    private static String readRequiredTextFile(String path) throws IOException {
+        File file = requireFile(new File(path));
+        return java.nio.file.Files.readString(file.toPath(), StandardCharsets.UTF_8);
+    }
+
+    private static void assertTextContains(String path, String text, String expectedText) {
+        if (!text.contains(expectedText)) {
+            throw new IllegalStateException("Expected " + path + " to contain " + expectedText);
+        }
+    }
+
+    private static void assertTextDoesNotContain(String path, String text, String unexpectedText) {
+        if (text.contains(unexpectedText)) {
+            throw new IllegalStateException("Expected " + path + " not to contain " + unexpectedText);
         }
     }
 
@@ -327,6 +486,18 @@ public final class VerifyModShadeArtifacts {
             if (reference != null) {
                 references.add(reference);
             }
+        }
+    }
+
+    private record EntryPrefixAndSuffix(String prefix, String suffix) {
+        private static EntryPrefixAndSuffix parse(String value) {
+            int separator = value.indexOf("::");
+            if (separator < 0) {
+                throw new IllegalArgumentException(
+                        "Expected entry prefix/suffix value to use '<prefix>::<suffix>', got: " + value
+                );
+            }
+            return new EntryPrefixAndSuffix(value.substring(0, separator), value.substring(separator + 2));
         }
     }
 

@@ -1,3 +1,4 @@
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
@@ -5,6 +6,7 @@ import org.gradle.api.tasks.bundling.Jar
 
 plugins {
     java
+    `maven-publish`
     id("com.gtnewhorizons.retrofuturagradle") version "1.4.9"
     id("net.mezzdev.modshade")
 }
@@ -109,13 +111,29 @@ tasks.assemble {
     dependsOn(apiJar)
 }
 
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            artifactId = base.archivesName.get()
+            from(components["java"])
+            artifact(apiJar)
+        }
+    }
+    repositories {
+        maven {
+            name = "integration"
+            url = layout.buildDirectory.dir("published").get().asFile.toURI()
+        }
+    }
+}
+
 val verifierSourceSets = project(":Verifier").extensions.getByType<SourceSetContainer>()
 val verifierRuntimeClasspath = verifierSourceSets.named(SourceSet.MAIN_SOURCE_SET_NAME).map { it.runtimeClasspath }
 
 tasks.register<JavaExec>("verifyIntegration") {
     group = "verification"
     description = "Builds and verifies the Forge 1.12.2 integration artifacts."
-    dependsOn("assemble", project(":Verifier").tasks.named("classes"))
+    dependsOn("assemble", "publishMavenJavaPublicationToIntegrationRepository", project(":Verifier").tasks.named("classes"))
     classpath(verifierRuntimeClasspath)
     classpath(configurations.named("runtimeClasspath"))
     mainClass.set("net.mezzdev.modshade.integration.VerifyModShadeArtifacts")
@@ -125,6 +143,11 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--runtime-jar", artifact("modshade-integration-forge-112-1.0.0.jar"),
         "--sources-jar", artifact("modshade-integration-forge-112-1.0.0-sources.jar"),
         "--api-jar", artifact("modshade-integration-forge-112-1.0.0-api.jar"),
+        "--published-runtime-jar", publishedArtifact("modshade-integration-forge-112-1.0.0.jar"),
+        "--published-sources-jar", publishedArtifact("modshade-integration-forge-112-1.0.0-sources.jar"),
+        "--published-api-jar", publishedArtifact("modshade-integration-forge-112-1.0.0-api.jar"),
+        "--published-pom", publishedArtifact("modshade-integration-forge-112-1.0.0.pom"),
+        "--published-module", publishedArtifact("modshade-integration-forge-112-1.0.0.module"),
         "--development-runtime-classpath-entry-prefix", "modshade-integration-library",
         "--loader-metadata", "mcmod.info",
         "--mod-class", "com/example/modshade/integration/forge/ForgeIntegrationMod.class",
@@ -137,8 +160,22 @@ tasks.register<JavaExec>("verifyIntegration") {
         "--forbidden-runtime-reference", "getTranslationKey",
         "--required-source-text", "net.minecraft.init.Items",
         "--required-source-text", "getTranslationKey()",
+        "--required-module-variant", "modShadeRuntimeElements",
+        "--required-module-variant", "modShadeSourcesElements",
+        "--forbidden-module-variant", "runtimeElements",
+        "--forbidden-module-variant", "sourcesElements",
+        "--required-module-artifact-file", "modshade-integration-forge-112-1.0.0.jar",
+        "--required-module-artifact-file", "modshade-integration-forge-112-1.0.0-sources.jar",
+        "--forbidden-pom-text", "modshade-integration-library",
+        "--forbidden-module-text", "modshade-integration-library",
     )
 }
 
 fun artifact(fileName: String): String =
     layout.buildDirectory.file("libs/$fileName").get().asFile.absolutePath
+
+fun publishedArtifact(fileName: String): String =
+    layout.buildDirectory.file("published/${group.toString().replace('.', '/')}/${base.archivesName.get()}/$version/$fileName")
+        .get()
+        .asFile
+        .absolutePath

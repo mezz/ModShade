@@ -5,6 +5,7 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.UnknownTaskException;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.component.AdhocComponentWithVariants;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.TaskProvider;
@@ -28,6 +29,12 @@ import java.util.Set;
  */
 @SuppressWarnings("unused")
 public abstract class ModShadeExtension {
+    private static final String JAVA_COMPONENT_NAME = "java";
+    private static final String JAVA_RUNTIME_ELEMENTS_CONFIGURATION_NAME = "runtimeElements";
+    private static final String JAVA_SOURCES_ELEMENTS_CONFIGURATION_NAME = "sourcesElements";
+    private static final String JAR_JAR_TASK_NAME = "jarJar";
+    private static final String JAR_JAR_CONFIGURATION_NAME = "jarJar";
+
     public static final List<String> DEFAULT_EXCLUDES = List.of(
             "META-INF/maven/**",
             "META-INF/*.SF",
@@ -53,6 +60,8 @@ public abstract class ModShadeExtension {
     private final Set<String> modShadeJarTaskNames = new LinkedHashSet<>();
     private final Set<String> publishedRuntimeTaskNames = new LinkedHashSet<>();
     private final Set<String> publishedSourcesTaskNames = new LinkedHashSet<>();
+    private boolean javaRuntimePublicationConfigured;
+    private boolean javaSourcesPublicationConfigured;
 
     @Inject
     public ModShadeExtension(
@@ -120,10 +129,20 @@ public abstract class ModShadeExtension {
             return shadeJar("modShadeJar", archiveTask);
         }
 
+        Optional<TaskProvider<? extends AbstractArchiveTask>> jarJar = findArchiveTask(JAR_JAR_TASK_NAME);
+        if (jarJar.isPresent() && hasDeclaredDependencies(JAR_JAR_CONFIGURATION_NAME)) {
+            TaskProvider<? extends AbstractArchiveTask> archiveTask = jarJar.get();
+            configureIntermediateJarClassifierForJarJar();
+            configureClassifier(archiveTask, "unshaded");
+            TaskProvider<ModShadeJar> task = shadeJar("modShadeJar", archiveTask);
+            configureDependsOnReobfTask(task, archiveTask.getName());
+            return task;
+        }
+
         TaskProvider<Jar> jar = project.getTasks().named("jar", Jar.class);
         configureClassifier(jar, "unshaded");
         TaskProvider<ModShadeJar> task = shadeJar("modShadeJar", jar);
-        configureDependsOnReobfJar(task);
+        configureDependsOnReobfTask(task, jar.getName());
         return task;
     }
 
@@ -166,17 +185,18 @@ public abstract class ModShadeExtension {
         return List.copyOf(modShadeJarTaskNames);
     }
 
-    private void configureDependsOnReobfJar(TaskProvider<ModShadeJar> task) {
-        Task reobfJar = project.getTasks().findByName("reobfJar");
-        if (reobfJar != null) {
-            task.configure(modShadeJar -> modShadeJar.dependsOn(reobfJar));
+    private void configureDependsOnReobfTask(TaskProvider<ModShadeJar> task, String sourceArchiveTaskName) {
+        String reobfTaskName = "reobf" + capitalize(sourceArchiveTaskName);
+        Task reobfTask = project.getTasks().findByName(reobfTaskName);
+        if (reobfTask != null) {
+            task.configure(modShadeJar -> modShadeJar.dependsOn(reobfTask));
             return;
         }
 
         project.afterEvaluate(evaluatedProject -> {
-            Task lateReobfJar = evaluatedProject.getTasks().findByName("reobfJar");
-            if (lateReobfJar != null) {
-                task.configure(modShadeJar -> modShadeJar.dependsOn(lateReobfJar));
+            Task lateReobfTask = evaluatedProject.getTasks().findByName(reobfTaskName);
+            if (lateReobfTask != null) {
+                task.configure(modShadeJar -> modShadeJar.dependsOn(lateReobfTask));
             }
         });
     }
@@ -187,16 +207,69 @@ public abstract class ModShadeExtension {
                 .configureEach(assemble -> assemble.dependsOn(archiveTask));
     }
 
+    private void configureIntermediateJarClassifierForJarJar() {
+        project.getTasks().named("jar", Jar.class).configure(jar -> {
+            String classifier = jar.getArchiveClassifier().getOrElse("");
+            if (classifier.isEmpty() || "unshaded".equals(classifier)) {
+                jar.getArchiveClassifier().set("plain-unshaded");
+            }
+        });
+    }
+
     private void publishRuntimeArtifact(TaskProvider<ModShadeJar> task) {
         if (publishedRuntimeTaskNames.add(task.getName())) {
             modShadeRuntimeElements.getOutgoing().artifact(task);
+            configureJavaRuntimePublication();
         }
     }
 
     private void publishSourcesArtifact(TaskProvider<ModShadeSourcesJar> task) {
         if (publishedSourcesTaskNames.add(task.getName())) {
             modShadeSourcesElements.getOutgoing().artifact(task);
+            configureJavaSourcesPublication();
         }
+    }
+
+    private void configureJavaRuntimePublication() {
+        if (javaRuntimePublicationConfigured) {
+            return;
+        }
+
+        javaRuntimePublicationConfigured = true;
+        project.getPlugins().withId("java", plugin -> {
+            AdhocComponentWithVariants javaComponent = javaComponent();
+            javaComponent.addVariantsFromConfiguration(modShadeRuntimeElements, variant ->
+                    variant.mapToMavenScope("runtime")
+            );
+            Configuration runtimeElements = project.getConfigurations().getByName(JAVA_RUNTIME_ELEMENTS_CONFIGURATION_NAME);
+            javaComponent.withVariantsFromConfiguration(runtimeElements, variant ->
+                    variant.skip()
+            );
+        });
+    }
+
+    private void configureJavaSourcesPublication() {
+        if (javaSourcesPublicationConfigured) {
+            return;
+        }
+
+        javaSourcesPublicationConfigured = true;
+        project.getPlugins().withId("java", plugin -> {
+            AdhocComponentWithVariants javaComponent = javaComponent();
+            javaComponent.addVariantsFromConfiguration(modShadeSourcesElements, variant ->
+                    variant.mapToMavenScope("runtime")
+            );
+            Configuration sourcesElements = project.getConfigurations().findByName(JAVA_SOURCES_ELEMENTS_CONFIGURATION_NAME);
+            if (sourcesElements != null) {
+                javaComponent.withVariantsFromConfiguration(sourcesElements, variant ->
+                        variant.skip()
+                );
+            }
+        });
+    }
+
+    private AdhocComponentWithVariants javaComponent() {
+        return (AdhocComponentWithVariants) project.getComponents().getByName(JAVA_COMPONENT_NAME);
     }
 
     private Optional<TaskProvider<? extends AbstractArchiveTask>> findArchiveTask(String taskName) {
@@ -205,6 +278,11 @@ public abstract class ModShadeExtension {
         } catch (UnknownTaskException | InvalidUserDataException e) {
             return Optional.empty();
         }
+    }
+
+    private boolean hasDeclaredDependencies(String configurationName) {
+        Configuration configuration = project.getConfigurations().findByName(configurationName);
+        return configuration != null && !configuration.getAllDependencies().isEmpty();
     }
 
     private static void configureClassifier(TaskProvider<? extends AbstractArchiveTask> archiveTask, String classifier) {
